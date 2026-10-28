@@ -1,11 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/pixelkit-raster",
-    "crates/pixelkit-text",
-    "crates/pixelkit-shell",
-    "crates/pixelkit-ui",
-    "crates/pixelkit-windowing",
+    "crates/liminalkit-raster",
+    "crates/liminalkit-text",
+    "crates/liminalkit-shell",
+    "crates/liminalkit-ui",
+    "crates/liminalkit-windowing",
+    "crates/liminalkit-kms",
 ]
 
 [workspace.package]
@@ -15,11 +16,12 @@ rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-pixelkit-raster = { path = "crates/pixelkit-raster" }
-pixelkit-text = { path = "crates/pixelkit-text" }
-pixelkit-shell = { path = "crates/pixelkit-shell" }
-pixelkit-ui = { path = "crates/pixelkit-ui" }
-pixelkit-windowing = { path = "crates/pixelkit-windowing" }
+liminalkit-raster = { path = "crates/liminalkit-raster" }
+liminalkit-text = { path = "crates/liminalkit-text" }
+liminalkit-shell = { path = "crates/liminalkit-shell" }
+liminalkit-ui = { path = "crates/liminalkit-ui" }
+liminalkit-windowing = { path = "crates/liminalkit-windowing" }
+liminalkit-kms = { path = "crates/liminalkit-kms" }
 winit = "0.30"
 softbuffer = "0.4"
 zeroize = "1.8"

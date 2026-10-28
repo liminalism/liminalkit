@@ -1,0 +1,25 @@
+[package]
+name = "liminalkit-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+liminalkit-text = { workspace = true }
+liminalkit-shell = { workspace = true }
+accesskit = { version = "0.25", optional = true }
+zeroize = { workspace = true }
+unicode-segmentation = "1.13.3"
+
+[dev-dependencies]
+liminalkit-text = { workspace = true, features = ["test-fonts"] }
+liminalkit-windowing = { workspace = true }
+
+[features]
+test-fonts = ["liminalkit-text/test-fonts"]
+accessibility = ["dep:accesskit"]
+
+[lints]
+workspace = true

@@ -1,0 +1,26 @@
+[package]
+name = "liminalkit-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+zeroize = { workspace = true }
+
+# macOS only: the system pasteboard and error beep, behind safe objc2
+# wrappers (no unsafe in this workspace).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSPasteboard", "NSGraphics"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSData"] }
+
+# Native X11 selections and Wayland data-control ownership, including the
+# serving lifetime; never a successful process-local production fallback.
+[target.'cfg(target_os = "linux")'.dependencies]
+# `image-data` adds PNG encode/decode for `Clipboard::set_image_rgba` via
+# the `image` crate (already in downstream graphs as an image viewer dep).
+arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control", "image-data"] }
+
+[lints]
+workspace = true

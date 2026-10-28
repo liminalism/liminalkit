@@ -1,0 +1,16 @@
+[package]
+name = "liminalkit-text"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+
+[lints]
+workspace = true
+
+[features]
+# Embeds two Noto faces for tests, examples and quick starts.
+test-fonts = []

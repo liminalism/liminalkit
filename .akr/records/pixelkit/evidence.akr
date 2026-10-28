@@ -25,6 +25,43 @@ record pixelkit.evidence.coverage-simd-tests/1 : evidence {
         """
 }
 
+record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
+    title "The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed."
+    state verified
+    result pass
+    method command
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    command "cargo fmt --all -- --check (from sibling LegeOS workspace)"
+    artifact ".agent/scratch/legeos-format-20261009/formatting.json"
+    summary """
+        The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed.
+        """
+}
+
+record pixelkit.evidence.touch-interactions-compile/1 : evidence {
+    title "The current working tree compiles across all workspace targets and features, including the original gesture, scroll_physics and touch_replay modules, touch_tuning example, and twelve new regression cases. Formatting and diff whitespace checks pass. No new behavioral tests were executed and no interactive or hardware validation was performed; gesture correctness, replay behavior, frame-partition invariance, physical latency and touch feel remain UNTESTED. Source docs, README, window title/banner and startup message label that status."
+    state verified
+    result pass
+    method command
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    command "cargo check --workspace --all-features --all-targets; cargo fmt --all -- --check; git diff --check"
+    summary """
+        The current working tree compiles across all workspace targets and features, including the original gesture, scroll_physics and touch_replay modules, touch_tuning example, and twelve new regression cases. Formatting and diff whitespace checks pass. No new behavioral tests were executed and no interactive or hardware validation was performed; gesture correctness, replay behavior, frame-partition invariance, physical latency and touch feel remain UNTESTED. Source docs, README, window title/banner and startup message label that status.
+        """
+}
+
+record pixelkit.evidence.touchscreen-tests/1 : evidence {
+    title "On the current working tree, all 440 workspace unit tests passed with all features; examples including touch compiled and doc tests passed. Six new tests cover native touch translation and cancellation, contact identity and gesture rebasing, invalid/stale motion, calibration, quick presses/cancellation, and primary-pointer ownership. Formatting and diff whitespace checks passed. No physical touchscreen, Linux/Pi hardware latency, or live window interaction was measured."
+    state verified
+    result pass
+    method command
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    command "cargo test --workspace --all-features; cargo fmt --all -- --check; git diff --check"
+    summary """
+        On the current working tree, all 440 workspace unit tests passed with all features; examples including touch compiled and doc tests passed. Six new tests cover native touch translation and cancellation, contact identity and gesture rebasing, invalid/stale motion, calibration, quick presses/cancellation, and primary-pointer ownership. Formatting and diff whitespace checks passed. No physical touchscreen, Linux/Pi hardware latency, or live window interaction was measured.
+        """
+}
+
 record pixelkit.evidence.windowing-live/1 : evidence {
     title "multi example mapped two titled OS windows; panes example mapped one, survived split/float keys, and exited on q with empty stderr"
     state verified

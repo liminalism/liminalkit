@@ -1,0 +1,27 @@
+[package]
+name = "liminalkit-windowing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+liminalkit-shell = { workspace = true }
+winit = { workspace = true }
+softbuffer = { workspace = true }
+accesskit_winit = { version = "0.34", default-features = false, features = ["rwh_06", "accesskit_unix", "async-io"], optional = true }
+accesskit = { version = "0.25", optional = true }
+
+[dev-dependencies]
+liminalkit-ui = { workspace = true }
+liminalkit-text = { workspace = true, features = ["test-fonts"] }
+
+[lints]
+workspace = true
+
+[features]
+# Publish each window's application-supplied semantic tree to platform
+# assistive technology through AccessKit. Off by default: a kiosk on a Pi has
+# no screen reader, and the adapter is a dependency the counter never pays for.
+accessibility = ["dep:accesskit", "dep:accesskit_winit"]

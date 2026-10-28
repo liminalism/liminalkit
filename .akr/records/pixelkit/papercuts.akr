@@ -1,6 +1,28 @@
 akr 0.1
 project pixelkit
 
+record pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 : papercut {
+    title "akr explain acceptance does not describe the optional acceptance slot;…"
+    state verified
+    statement """
+        akr explain acceptance does not describe the optional acceptance slot; it accepts only record kinds or rule codes. Work schema lists the slot without its fragment syntax.
+        """
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    author "codex"
+    created_at 2026-10-15
+}
+
+record pixelkit.papercut.during-a-read-only-follow-up-assessment-akr/1 : papercut {
+    title "During a read-only follow-up assessment, akr start returned only an…"
+    state verified
+    statement """
+        During a read-only follow-up assessment, akr start returned only an unrelated SIMD proposal and context rejected the relevant completed touchscreen work. Used akr get to retrieve the completed work; there is no live touch planning record for this advisory question.
+        """
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    author "codex"
+    created_at 2026-10-15
+}
+
 record pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 : papercut {
     title "During the first PixelKit planning lookup, akr start failed while…"
     state verified
@@ -10,4 +32,48 @@ record pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 : paper
     observed_at git:7492c49a204321cd3abea7ad0fe1433aa63362ca
     author "codex"
     created_at 2026-09-24
+}
+
+record pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 : papercut {
+    title "Recording the sibling formatting result failed because the retained…"
+    state verified
+    statement """
+        Recording the sibling formatting result failed because the retained LegeOS scratch group is not recognized as retained by Pixelkit. Keep a small local evidence artifact in Pixelkit before adding its evidence; the first rejected write changed no records.
+        """
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    author "codex"
+    created_at 2026-10-09
+}
+
+record pixelkit.papercut.the-experimental-tuning-example-initially-used/1 : papercut {
+    title "The experimental tuning example initially used Rect::new in a const,…"
+    state verified
+    statement """
+        The experimental tuning example initially used Rect::new in a const, but that constructor is not const; cargo check caught it. Replaced it with a Rect literal without changing the raster API.
+        """
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    author "codex"
+    created_at 2026-10-15
+}
+
+record pixelkit.papercut.the-knowledge-mcp-tools-named-by-agents-md-are/1 : papercut {
+    title "The knowledge MCP tools named by AGENTS.md are unavailable in this…"
+    state verified
+    statement """
+        The knowledge MCP tools named by AGENTS.md are unavailable in this session; used the equivalent akr CLI. The winit docs.rs page also failed to load, so API details were checked in the installed crate source.
+        """
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    author "codex"
+    created_at 2026-10-15
+}
+
+record pixelkit.papercut.the-new-touch-example-initially-passed-run-app/1 : papercut {
+    title "The new touch example initially passed run_app arguments in config/app…"
+    state verified
+    statement """
+        The new touch example initially passed run_app arguments in config/app order; the API takes app/config. Compilation caught this and the example was corrected. Theme is defined outside a standalone theme.rs, so filename guessing also missed.
+        """
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    author "codex"
+    created_at 2026-10-15
 }

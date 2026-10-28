@@ -5,7 +5,7 @@ build {
     tool "akr 0.5.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:db756944e491b43fa10d7de3b53dd5dcf0e859296d29eded93e53ae04be52c21"
+    source_graph "sha256:5b51cfa489f4277c41764b9e93a26ca3642ca3a35903a27fbec2f5c5c34b2f01"
 }
 
 source ".akr/project.akr" {
@@ -14,18 +14,18 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:d72180109356ddeb3cf5e96823e7711673dcf99dc2394b7a22349ec4d903a642"
-    records 4
+    hash "sha256:6f78b16a7729e5245f10217dd877ca1c639070d0752a0c400e0a8f2a48909fcb"
+    records 7
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
-    hash "sha256:6d3797a47d968330113294641933325ae9d8520f2c9c8330eb5274e0188b33df"
-    records 1
+    hash "sha256:d478583e615e5ad9cf0b910d01428c9b61aa4df5259e516027e26e28c0104915"
+    records 7
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:b8b79d091a3cfbd9a8347d3aa7a4e43b83a1f6cf50b55c153cbe9cec47e8b675"
-    records 2
+    hash "sha256:5d4c6b3814bb354664557b3491e67264be71faa141c2cd38622ddabc795cda3f"
+    records 4
 }
 
 seal @pixelkit.evidence.coverage-simd-profile/1 {
@@ -38,6 +38,21 @@ seal @pixelkit.evidence.coverage-simd-tests/1 {
     hash "sha256:112faae8aa88726b45a4afce0614748814c36037be2fd12e2c033d5a9523b9c8"
 }
 
+seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
+    state verified
+    hash "sha256:7be3c4e877ed80d33a38f802bcf894f66e84bdbe475234b7ba532f7a87109d7e"
+}
+
+seal @pixelkit.evidence.touch-interactions-compile/1 {
+    state verified
+    hash "sha256:183e10ce1e4dadea73c1fa1f9624309505dc024a4fff781ec5a1055a40920a11"
+}
+
+seal @pixelkit.evidence.touchscreen-tests/1 {
+    state verified
+    hash "sha256:94fc92ef763e1d8bae132997fd1c80d19f7e3a03d96a8c1117d63f262d9fbed5"
+}
+
 seal @pixelkit.evidence.windowing-live/1 {
     state verified
     hash "sha256:3d65c97b5cd2890d17ea35c5567aa5172142f8d5ee3e71d44f1e131970d27fb2"
@@ -48,9 +63,49 @@ seal @pixelkit.evidence.windowing-tests/1 {
     hash "sha256:e4093c7277ffed9e41a58c0a874a0613cd287a42e0992b9a4a15772499f82b4d"
 }
 
+seal @pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 {
+    state verified
+    hash "sha256:2ca083acc8b283058bd4767ec1f8b37f1b661ed3a5672bfe158a2a3d1d213a28"
+}
+
+seal @pixelkit.papercut.during-a-read-only-follow-up-assessment-akr/1 {
+    state verified
+    hash "sha256:de927e2cd7825d1be2ec966a52e25978ba07ca3d1784304ead2b4ed9f4c4e89d"
+}
+
 seal @pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 {
     state verified
     hash "sha256:e968eba153f8a82e41bc3f364b402ae7bbd305e61633d951576931bff9036d18"
+}
+
+seal @pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 {
+    state verified
+    hash "sha256:07444db44ebf88986848128bf9d7b1444b18b16b1b49d60cae6ef55c31f2b951"
+}
+
+seal @pixelkit.papercut.the-experimental-tuning-example-initially-used/1 {
+    state verified
+    hash "sha256:386dc80690e5c80617750847d59f784a475e8e5aacf7effd9e2ba0e462c04fb3"
+}
+
+seal @pixelkit.papercut.the-knowledge-mcp-tools-named-by-agents-md-are/1 {
+    state verified
+    hash "sha256:8cc3ee9a87f22f1e2bed3767b899b691800f39261f223ea4c6c0209f9426c654"
+}
+
+seal @pixelkit.papercut.the-new-touch-example-initially-passed-run-app/1 {
+    state verified
+    hash "sha256:940915a14cd0e70f113ecf00d0019d402008598887ec743a086758235c433047"
+}
+
+seal @pixelkit.work.touch-interactions/1 {
+    state completed
+    hash "sha256:5fcf1741b69ee9efb7f5767e4c5d0e44160866fc1857cbbf6eb42c7d7020face"
+}
+
+seal @pixelkit.work.touchscreen/1 {
+    state completed
+    hash "sha256:6a4ee53111d802324a95c622ac4470537d2abee42f744b6d28ad4e1ee2da9d48"
 }
 
 seal @pixelkit.work.windowing-crate/1 {

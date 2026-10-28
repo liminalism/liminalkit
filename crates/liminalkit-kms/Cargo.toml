@@ -1,0 +1,23 @@
+[package]
+name = "liminalkit-kms"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+liminalkit-shell = { workspace = true }
+liminalkit-windowing = { workspace = true }
+
+# Already in the graph through `wide`; used here to view a scan-out buffer's
+# bytes as pixels, safely (alignment is checked, never assumed).
+bytemuck = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+drm = "0.14"
+evdev = "0.13"
+rustix = { version = "1", features = ["event"] }
+
+[lints]
+workspace = true

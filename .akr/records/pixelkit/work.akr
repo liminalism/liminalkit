@@ -15,6 +15,39 @@ record pixelkit.work.raster-simd-coverage/1 : work {
         """
 }
 
+record pixelkit.work.touch-interactions/1 : work {
+    title "Experimental original touch interaction physics and playground"
+    state completed
+    intent """
+        Implement original renderer-independent tap/drag/pinch arbitration, release
+        velocity, configurable inertial/elastic/snapping scrolling, and a touch tuning
+        playground with bounded recording, deterministic replay and motion graphs.
+        Use no third-party gesture or physics implementation. Clearly label the new
+        APIs and example experimental and behavior/hardware/feel untested. Perform
+        compile and formatting checks only; provide regression tests for later runs.
+        """
+    note """
+        EXPERIMENTAL / UNTESTED. Implementation and compile checks are complete only.
+        The twelve regression cases are provided but unrun. Interactive behavior,
+        physical hardware, latency and subjective touch feel are explicitly untested.
+        Recording is memory-only. Nested parent capture and fling transfer remain
+        application policy; the physics API supplies unconsumed hard-bound drag deltas.
+        """
+    verified_by [ @pixelkit.evidence.touch-interactions-compile/1 ]
+}
+
+record pixelkit.work.touchscreen/1 : work {
+    title "Touchscreen UI building blocks"
+    state completed
+    intent """
+        Add host-independent touchscreen primitives, contact lifecycle and gesture
+        tracking, an explicit existing-widget pointer adapter, native winit delivery,
+        and a runnable touch diagnostics example. Preserve hardware-independent
+        rendering and distinguish host event timing from physical touch latency.
+        """
+    verified_by [ @pixelkit.evidence.touchscreen-tests/1 ]
+}
+
 record pixelkit.work.windowing-crate/1 : work {
     title "Windowing crate: host move, multi-window, panes, in-app windows"
     state completed
