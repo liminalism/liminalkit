@@ -2,9 +2,10 @@ akr-lock 0.1
 project pixelkit
 
 build {
-    tool "akr 0.5.1"
+    tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
+    commit git:cccde64ba00165a0c863273c9d0b1cec6c97d4df
     source_graph "sha256:5b51cfa489f4277c41764b9e93a26ca3642ca3a35903a27fbec2f5c5c34b2f01"
 }
 
