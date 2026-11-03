@@ -364,7 +364,7 @@ impl Ui<'_> {
 mod tests {
     use super::*;
     use liminalkit_raster::WindowBuffer;
-    use liminalkit_text::font::test_fonts;
+    use liminalkit_test_fonts as test_fonts;
 
     fn card<'a>(
         body: &'a str,

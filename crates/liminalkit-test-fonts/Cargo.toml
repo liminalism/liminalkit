@@ -1,0 +1,15 @@
+[package]
+name = "liminalkit-test-fonts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Two Noto faces for liminalkit's tests and examples. Never published: application builds embed their own fonts."
+publish = false
+
+[dependencies]
+liminalkit-text = { workspace = true }
+
+[lints]
+workspace = true

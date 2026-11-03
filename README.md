@@ -8,7 +8,7 @@ Source: <https://github.com/liminalism/liminalkit>. Not yet published to crates.
 
 ![The control gallery, rendered by the software rasterizer with no window](docs/screenshots/gallery.png)
 
-That image is `cargo run -p liminalkit-ui --example gallery --features test-fonts`: every control the toolkit ships, drawn into a pixel buffer and written out as PNG by the toolkit's own encoder.
+That image is `cargo run -p liminalkit-ui --example gallery`: every control the toolkit ships, drawn into a pixel buffer and written out as PNG by the toolkit's own encoder.
 
 ## Why this and not egui, Dioxus, or Freya
 
@@ -23,11 +23,24 @@ What it does not try to be: a universal application framework. Layout is written
 
 ```toml
 [dependencies]
-liminalkit = { git = "https://github.com/liminalism/liminalkit", features = ["test-fonts"] }
+liminalkit = { git = "https://github.com/liminalism/liminalkit" }
 ```
 
 ```rust
 use liminalkit::prelude::*;
+use std::sync::OnceLock;
+
+/// The application embeds its faces: any TrueType file with `glyf` outlines.
+fn fonts() -> &'static FontSet {
+    static SET: OnceLock<FontSet> = OnceLock::new();
+    SET.get_or_init(|| {
+        let face = Face::from_bytes(include_bytes!("../fonts/NotoSans-Regular.ttf"))
+            .expect("a TrueType face");
+        let mut set = FontSet::new();
+        set.add(Box::leak(Box::new(face)));
+        set
+    })
+}
 
 struct Hello {
     clicks: u32,
@@ -49,18 +62,14 @@ impl Screen for Hello {
 }
 
 fn main() {
-    liminalkit::run(
-        Hello { clicks: 0 },
-        liminalkit::text::font::test_fonts::set(),
-        WindowConfig::new("hello", 320.0, 200.0),
-    )
-    .expect("run");
+    liminalkit::run(Hello { clicks: 0 }, fonts(), WindowConfig::new("hello", 320.0, 200.0))
+        .expect("run");
 }
 ```
 
-That is `crates/liminalkit/examples/hello.rs`. `App` owns the text cache, raster kernel, per-frame `Input`, and keyboard `Focus`, forwards every host event, and ends the frame. A `Screen` keeps its own state as ordinary fields. An application that wants to own all of that itself implements `PixelApp` directly; `crates/liminalkit/examples/window_lowlevel.rs` is the same screen written that way, and `crates/liminalkit/src/app.rs` is the whole adapter.
+That is `crates/liminalkit/examples/hello.rs`, except that the example takes its `FontSet` from `liminalkit-test-fonts`, the workspace's unpublished fixtures crate. `App` owns the text cache, raster kernel, per-frame `Input`, and keyboard `Focus`, forwards every host event, and ends the frame. A `Screen` keeps its own state as ordinary fields. An application that wants to own all of that itself implements `PixelApp` directly; `crates/liminalkit/examples/window_lowlevel.rs` is the same screen written that way, and `crates/liminalkit/src/app.rs` is the whole adapter.
 
-`test-fonts` embeds two Noto faces so a first run has something to draw with. Application builds leave it off and register their own faces in a `FontSet`.
+No crate ships a font. The tests and examples use Noto Sans and Noto Sans Thai from `crates/liminalkit-test-fonts`, which has `publish = false` and is only ever a dev-dependency, so neither the published crates nor an application build carry its 550 KB.
 
 ## How a screen is put together
 
@@ -103,13 +112,14 @@ Raster and text do not know about either host. The shell is what they share with
 
 | Crate | Role |
 |---|---|
-| [`liminalkit`](crates/liminalkit) | The front door: re-exports the crates below as `liminalkit::{raster, text, shell, ui, windowing, kms}`, plus `App` and `Screen`. Features: `test-fonts`, `accessibility`, `kms`, `bidi`. |
+| [`liminalkit`](crates/liminalkit) | The front door: re-exports the crates below as `liminalkit::{raster, text, shell, ui, windowing, kms}`, plus `App` and `Screen`. Features: `accessibility`, `kms`, `bidi`. |
 | [`liminalkit-raster`](crates/liminalkit-raster) | An XRGB buffer, a clipped painter, and analytic coverage for paths and glyphs. PNG, images prepared once for the size they are drawn at, and SVG icons rasterized once and tinted. |
 | [`liminalkit-text`](crates/liminalkit-text) | TrueType faces, the OpenType substitutions and positioning this stack implements, fallback, wrapping, and a string cache. `bidi` adds Unicode bidirectional reordering. |
 | [`liminalkit-shell`](crates/liminalkit-shell) | `Input`, `Scale`, `Presenter`, the clipboard, and touch contacts. |
 | [`liminalkit-ui`](crates/liminalkit-ui) | Immediate-mode controls over those three, keyboard focus, and stateless layout. |
 | [`liminalkit-windowing`](crates/liminalkit-windowing) | OS windows, draggable panes, and floating in-app windows. `winit` and `softbuffer` stay here. |
 | [`liminalkit-kms`](crates/liminalkit-kms) | The Linux DRM/KMS and evdev host for a `PixelApp`. |
+| [`liminalkit-test-fonts`](crates/liminalkit-test-fonts) | Noto Sans and Noto Sans Thai as a `FontSet` for tests and examples. Not published. |
 
 The workspace forbids `unsafe`. Rust 1.85 or newer.
 
@@ -148,35 +158,35 @@ existing device readers.
 ## Build
 
 ```sh
-cargo test --workspace --features liminalkit/test-fonts
+cargo test --workspace
 cargo test -p liminalkit-text --features bidi
 
 # Gallery to target/gallery@1x.png (or @2x.png), with no window; an optional scale factor
-cargo run -p liminalkit-ui --example gallery --features test-fonts
-cargo run -p liminalkit-ui --example gallery --features test-fonts -- 2.0
+cargo run -p liminalkit-ui --example gallery
+cargo run -p liminalkit-ui --example gallery -- 2.0
 
 # The quick start, the tutorial's screen, the interactive demo through App, and the same demo over PixelApp
-cargo run -p liminalkit --features test-fonts --example hello
-cargo run -p liminalkit --features test-fonts --example tutorial
-cargo run -p liminalkit --features test-fonts --example window
-cargo run -p liminalkit --features test-fonts --example window_lowlevel
+cargo run -p liminalkit --example hello
+cargo run -p liminalkit --example tutorial
+cargo run -p liminalkit --example window
+cargo run -p liminalkit --example window_lowlevel
 
 # Frame times for one operational screen at 720p to 4K, with no window
-cargo run --release -p liminalkit --features test-fonts --example frame_bench
+cargo run --release -p liminalkit --example frame_bench
 
 # Tiled panes with floating windows, and two OS windows
-cargo run -p liminalkit --features test-fonts --example panes
-cargo run -p liminalkit --features test-fonts --example multi
+cargo run -p liminalkit --example panes
+cargo run -p liminalkit --example multi
 
 # Contacts, and the untested tuning playground
-cargo run -p liminalkit --features test-fonts --example touch
-cargo run -p liminalkit --features test-fonts --example touch_tuning
+cargo run -p liminalkit --example touch
+cargo run -p liminalkit --example touch_tuning
 
 # Displays this process can see, without taking one
 cargo run -p liminalkit-kms --example probe
 ```
 
-`test-fonts` embeds Noto Sans and Noto Sans Thai for examples and tests. Application builds leave it off. `bidi` is the only feature that adds a dependency to the text crate; a left-to-right build does not need it. Font details are in [`crates/liminalkit-text/test-fonts/README.md`](crates/liminalkit-text/test-fonts/README.md).
+The examples and tests draw with Noto Sans and Noto Sans Thai from the unpublished `liminalkit-test-fonts` crate; `crates/liminalkit-test-fonts/fonts/README.md` says exactly which builds. `bidi` is the only feature that adds a dependency to the text crate; a left-to-right build does not need it. Font details are in [`crates/liminalkit-text/test-fonts/README.md`](crates/liminalkit-text/test-fonts/README.md).
 
 `LIMINALKIT_FRAME_LOG=1` prints p50, p95, and maximum timings for the phases the shell was given. `frame_bench` renders one busy screen headlessly at several resolutions and prints the cost of a full redraw; software rendering scales with pixels, and this is where to see by how much on a given machine.
 

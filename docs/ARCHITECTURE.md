@@ -12,6 +12,8 @@ liminalkit            front door: re-exports, prelude, App/Screen adapter, examp
 ├── liminalkit-shell       Input, Scale, Presenter, Clipboard, touch contacts  (raster)
 ├── liminalkit-text        TrueType, OpenType shaping, glyph raster, string cache  (raster)
 └── liminalkit-raster      WindowBuffer, Painter, Rect, analytic coverage, PNG, SVG icons
+
+liminalkit-test-fonts      Noto Sans + Noto Sans Thai as a FontSet; dev-only, never published  (text)
 ```
 
 Dependencies point downward only. `raster` and `text` know nothing about windows or input; `shell` is what hosts and applications share; `ui` is the controls over those three; the two hosts sit beside each other and both drive the same `PixelApp`. The facade at the top re-exports everything as `liminalkit::{raster, text, shell, ui, windowing, kms}`.

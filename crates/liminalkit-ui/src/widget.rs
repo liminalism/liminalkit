@@ -2195,7 +2195,7 @@ mod text_field_tests {
 mod masked_text_field_tests {
     use super::*;
     use liminalkit_raster::WindowBuffer;
-    use liminalkit_text::font::test_fonts::set;
+    use liminalkit_test_fonts::set;
 
     fn area() -> Rect {
         Rect::new(0, 0, 200, 30)
@@ -2501,7 +2501,7 @@ mod table_tests {
     use super::*;
     use liminalkit_raster::WindowBuffer;
     use liminalkit_shell::MouseButton;
-    use liminalkit_text::font::test_fonts::set;
+    use liminalkit_test_fonts::set;
 
     const ROW_HEIGHT: i32 = 30;
 
@@ -2750,7 +2750,7 @@ mod table_tests {
 mod gutter_tests {
     use super::*;
     use liminalkit_raster::WindowBuffer;
-    use liminalkit_text::font::test_fonts::set;
+    use liminalkit_test_fonts::set;
 
     /// A table always leaves room for its scrollbar, scrollable or not.
     ///

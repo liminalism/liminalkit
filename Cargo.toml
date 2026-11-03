@@ -8,22 +8,26 @@ members = [
     "crates/liminalkit-windowing",
     "crates/liminalkit-kms",
     "crates/liminalkit",
+    "crates/liminalkit-test-fonts",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/liminalism/liminalkit"
 
 [workspace.dependencies]
-liminalkit-raster = { version = "0.1.0", path = "crates/liminalkit-raster" }
-liminalkit-text = { version = "0.1.0", path = "crates/liminalkit-text" }
-liminalkit-shell = { version = "0.1.0", path = "crates/liminalkit-shell" }
-liminalkit-ui = { version = "0.1.0", path = "crates/liminalkit-ui" }
-liminalkit-windowing = { version = "0.1.0", path = "crates/liminalkit-windowing" }
-liminalkit-kms = { version = "0.1.0", path = "crates/liminalkit-kms" }
+liminalkit-raster = { version = "0.5.0", path = "crates/liminalkit-raster" }
+liminalkit-text = { version = "0.5.0", path = "crates/liminalkit-text" }
+liminalkit-shell = { version = "0.5.0", path = "crates/liminalkit-shell" }
+liminalkit-ui = { version = "0.5.0", path = "crates/liminalkit-ui" }
+liminalkit-windowing = { version = "0.5.0", path = "crates/liminalkit-windowing" }
+liminalkit-kms = { version = "0.5.0", path = "crates/liminalkit-kms" }
+# Dev-dependency only, and deliberately without a version: cargo drops a
+# path-only dev-dependency when it publishes, so the fonts never ship.
+liminalkit-test-fonts = { path = "crates/liminalkit-test-fonts" }
 winit = "0.30"
 softbuffer = "0.4"
 zeroize = "1.8"

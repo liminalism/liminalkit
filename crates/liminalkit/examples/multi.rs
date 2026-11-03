@@ -4,17 +4,17 @@
 //! `X` closes just that window, `Q` quits everything.
 //!
 //! ```sh
-//! cargo run -p liminalkit --features test-fonts --example multi
+//! cargo run -p liminalkit --example multi
 //! ```
 
 use std::collections::VecDeque;
 
 use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
 use liminalkit::shell::{Input, KeyInput, MouseButton, Scale};
-use liminalkit::text::font::test_fonts::{set, LATIN};
 use liminalkit::text::{Align, TextCache, TextStyle};
 use liminalkit::ui::{Theme, Ui};
 use liminalkit::windowing::{run_windows, PixelApp, WindowConfig, WindowRequest};
+use liminalkit_test_fonts::{set, LATIN};
 
 struct Counter {
     label: String,

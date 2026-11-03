@@ -2,7 +2,7 @@
 //! into this, one step at a time.
 //!
 //! ```sh
-//! cargo run -p liminalkit --features test-fonts --example tutorial
+//! cargo run -p liminalkit --example tutorial
 //! ```
 
 use liminalkit::prelude::*;
@@ -203,7 +203,7 @@ fn main() {
             confirm: Overlay::new(),
             status: String::new(),
         },
-        liminalkit::text::font::test_fonts::set(),
+        liminalkit_test_fonts::set(),
         WindowConfig::new("liminalkit tutorial", 720.0, 480.0),
     )
     .expect("run");

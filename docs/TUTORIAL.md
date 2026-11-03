@@ -3,7 +3,7 @@
 This grows `crates/liminalkit/examples/hello.rs` into `crates/liminalkit/examples/tutorial.rs`: a filterable table with a dropdown, a checkbox, and a confirmation dialog. Each step is a few lines. Run the finished screen with:
 
 ```sh
-cargo run -p liminalkit --features test-fonts --example tutorial
+cargo run -p liminalkit --example tutorial
 ```
 
 ## Step 0: hello
@@ -24,7 +24,9 @@ impl Screen for Hello {
 }
 
 fn main() {
-    liminalkit::run(Hello { clicks: 0 }, liminalkit::text::font::test_fonts::set(),
+    // The examples draw with the workspace's Noto fixtures; an application
+    // builds a `FontSet` from faces it embeds itself (see the README).
+    liminalkit::run(Hello { clicks: 0 }, liminalkit_test_fonts::set(),
         WindowConfig::new("hello", 320.0, 200.0)).expect("run");
 }
 ```

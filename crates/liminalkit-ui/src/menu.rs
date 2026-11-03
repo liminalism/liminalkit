@@ -86,7 +86,8 @@ mod tests {
     use crate::widget::Theme;
     use liminalkit_raster::{Painter, RasterKernel, WindowBuffer};
     use liminalkit_shell::{KeyInput, MouseButton, Scale};
-    use liminalkit_text::{font::test_fonts::set, TextCache};
+    use liminalkit_test_fonts::set;
+    use liminalkit_text::TextCache;
 
     struct Harness {
         buffer: WindowBuffer,

@@ -2,9 +2,10 @@
 //! Run with LIMINALKIT_FRAME_LOG=1 to measure host receipt → present return.
 use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
 use liminalkit::shell::{Input, Scale, TouchEvent, TouchPhase, TouchPointer, TouchState};
-use liminalkit::text::{font::test_fonts::set, Align, TextCache};
+use liminalkit::text::{Align, TextCache};
 use liminalkit::ui::{Theme, Ui};
 use liminalkit::windowing::{run_app, PixelApp, WindowConfig};
+use liminalkit_test_fonts::set;
 
 struct Demo {
     touches: TouchState,

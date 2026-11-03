@@ -389,26 +389,34 @@ impl FontSet {
     }
 }
 
-#[cfg(any(test, feature = "test-fonts"))]
+/// The same two Noto faces `liminalkit-test-fonts` provides, for this crate's
+/// own unit tests, which need them as *this* crate's `Face` rather than a
+/// dependency's. Only under `cfg(test)`: the files live in the unpublished
+/// fixtures crate (`crates/liminalkit-test-fonts/fonts/README.md` says what
+/// they are), so a published copy of this crate builds without them and its
+/// unit tests are run from the repository.
+#[cfg(test)]
 pub mod test_fonts {
-    //! Two Noto faces kept as test fixtures (and for examples): Thai has no
-    //! Latin, Latin has no Thai, so together they exercise fallback and mixed
-    //! runs. Behind the `test-fonts` feature so applications do not carry
-    //! 550 KB of fonts they never draw with.
     use super::*;
     use std::sync::OnceLock;
 
     pub fn thai() -> &'static Face {
         static FACE: OnceLock<Face> = OnceLock::new();
         FACE.get_or_init(|| {
-            Face::from_bytes(include_bytes!("../test-fonts/NotoSansThai-Regular.ttf")).unwrap()
+            Face::from_bytes(include_bytes!(
+                "../../liminalkit-test-fonts/fonts/NotoSansThai-Regular.ttf"
+            ))
+            .unwrap()
         })
     }
 
     pub fn latin() -> &'static Face {
         static FACE: OnceLock<Face> = OnceLock::new();
         FACE.get_or_init(|| {
-            Face::from_bytes(include_bytes!("../test-fonts/NotoSans-Regular.ttf")).unwrap()
+            Face::from_bytes(include_bytes!(
+                "../../liminalkit-test-fonts/fonts/NotoSans-Regular.ttf"
+            ))
+            .unwrap()
         })
     }
 

@@ -6,6 +6,6 @@ The controls of [liminalkit](../../README.md), in immediate mode over `liminalki
 
 **What it is not.** No widget tree, no identity map, no per-widget storage, no retained layout hierarchy, no constraint solver. Theme sizes are logical and the controls scale them; rectangles are device pixels.
 
-**Features.** `accessibility` records every drawn control into a `Semantics` collector for AccessKit. `test-fonts` forwards to `liminalkit-text`.
+**Features.** `accessibility` records every drawn control into a `Semantics` collector for AccessKit. Tests and the gallery example take their fonts from the unpublished `liminalkit-test-fonts` crate.
 
 **Who uses it.** Applications, through the `liminalkit` facade or directly; `liminalkit-windowing` does not depend on it.

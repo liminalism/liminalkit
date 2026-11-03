@@ -472,7 +472,7 @@ mod tests {
     }
 
     fn fonts() -> &'static FontSet {
-        liminalkit_text::font::test_fonts::set()
+        liminalkit_test_fonts::set()
     }
 
     fn frame(app: &mut App<Counter>) {

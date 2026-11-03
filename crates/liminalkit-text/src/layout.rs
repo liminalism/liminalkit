@@ -1161,7 +1161,8 @@ mod tests {
     use super::*;
     use crate::sfnt::Sfnt;
 
-    const THAI: &[u8] = include_bytes!("../test-fonts/NotoSansThai-Regular.ttf");
+    const THAI: &[u8] =
+        include_bytes!("../../liminalkit-test-fonts/fonts/NotoSansThai-Regular.ttf");
 
     /// The font is embedded, so its tables borrow from `'static` bytes and
     /// outlive the `Sfnt` that located them.

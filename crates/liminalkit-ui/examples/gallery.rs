@@ -1,12 +1,12 @@
 //! Every widget once, rendered headlessly to `target/gallery.png`.
 //!
 //! ```sh
-//! cargo run -p liminalkit-ui --example gallery --features test-fonts
+//! cargo run -p liminalkit-ui --example gallery
 //! ```
 
 use liminalkit_raster::{png, Painter, RasterKernel, Rect, WindowBuffer};
 use liminalkit_shell::{Input, Scale};
-use liminalkit_text::font::test_fonts::{set, LATIN};
+use liminalkit_test_fonts::{set, LATIN};
 use liminalkit_text::{Align, TextCache, TextStyle};
 use liminalkit_ui::{ButtonStyle, ScrollState, Theme, Tooltip, TooltipStyle, Ui};
 

@@ -41,7 +41,7 @@
 //! fn main() {
 //!     liminalkit::run(
 //!         Hello { clicks: 0 },
-//!         liminalkit::text::font::test_fonts::set(),
+//!         liminalkit_test_fonts::set(),
 //!         WindowConfig::new("hello", 320.0, 200.0),
 //!     )
 //!     .expect("run");

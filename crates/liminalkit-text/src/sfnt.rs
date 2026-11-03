@@ -627,8 +627,9 @@ fn parse_simple_glyph(reader: &mut Reader<'_>, contour_count: usize) -> Option<O
 mod tests {
     use super::*;
 
-    const THAI: &[u8] = include_bytes!("../test-fonts/NotoSansThai-Regular.ttf");
-    const LATIN: &[u8] = include_bytes!("../test-fonts/NotoSans-Regular.ttf");
+    const THAI: &[u8] =
+        include_bytes!("../../liminalkit-test-fonts/fonts/NotoSansThai-Regular.ttf");
+    const LATIN: &[u8] = include_bytes!("../../liminalkit-test-fonts/fonts/NotoSans-Regular.ttf");
 
     fn thai() -> Sfnt<'static> {
         Sfnt::parse(THAI).expect("the embedded Thai face must parse")

@@ -297,7 +297,7 @@ mod tests {
     use crate::widget::Theme;
     use liminalkit_raster::{Painter, RasterKernel, WindowBuffer};
     use liminalkit_shell::{Input, MouseButton, Scale};
-    use liminalkit_text::font::test_fonts::set;
+    use liminalkit_test_fonts::set;
     use liminalkit_text::TextCache;
 
     fn ui_harness<R>(input: &mut Input, run: impl FnOnce(&mut Ui<'_>) -> R) -> (WindowBuffer, R) {

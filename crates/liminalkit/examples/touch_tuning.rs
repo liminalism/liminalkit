@@ -8,9 +8,10 @@ use liminalkit::shell::gesture::{DragAxis, Gesture, GestureConfig, GestureRecogn
 use liminalkit::shell::scroll_physics::{Boundary, ScrollAxis, ScrollConfig};
 use liminalkit::shell::touch_replay::{ReplayCursor, TouchRecording};
 use liminalkit::shell::{Input, KeyInput, MouseButton, Scale, TouchEvent, TouchId, TouchPhase};
-use liminalkit::text::{font::test_fonts::set, Align, TextCache};
+use liminalkit::text::{Align, TextCache};
 use liminalkit::ui::{Theme, Ui};
 use liminalkit::windowing::{run_app, PixelApp, WindowConfig};
+use liminalkit_test_fonts::set;
 use std::time::{Duration, Instant};
 
 const TOP: f64 = 100.0;

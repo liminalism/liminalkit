@@ -111,7 +111,7 @@ mod tests {
     use crate::widget::Theme;
     use liminalkit_raster::{Painter, RasterKernel, WindowBuffer};
     use liminalkit_shell::{Input, Scale};
-    use liminalkit_text::font::test_fonts::{set, style as test_style};
+    use liminalkit_test_fonts::{set, style as test_style};
     use liminalkit_text::TextCache;
 
     #[test]

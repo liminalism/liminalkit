@@ -7,18 +7,18 @@
 //! `Q` quits.
 //!
 //! ```sh
-//! cargo run -p liminalkit --features test-fonts --example panes
+//! cargo run -p liminalkit --example panes
 //! ```
 
 use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
 use liminalkit::shell::{Input, KeyInput, MouseButton, Scale};
-use liminalkit::text::font::test_fonts::{set, LATIN};
 use liminalkit::text::{Align, TextCache, TextStyle};
 use liminalkit::ui::{Theme, Ui};
 use liminalkit::windowing::{
     run_app, CursorShape, PaneId, PaneMetrics, Panes, PixelApp, Side, WindowConfig, WindowMetrics,
     Windows,
 };
+use liminalkit_test_fonts::{set, LATIN};
 
 struct Demo {
     text: TextCache,

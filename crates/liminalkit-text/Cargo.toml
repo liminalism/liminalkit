@@ -17,12 +17,15 @@ liminalkit-raster = { workspace = true }
 unicode-bidi = { version = "0.3.18", optional = true, default-features = false, features = ["std", "hardcoded-data"] }
 unicode-bidi-mirroring = { version = "0.2", optional = true }
 
+[dev-dependencies]
+# Path only, so it is dropped on publish. The crate's own unit tests use the
+# same files through `font::test_fonts`, under `cfg(test)`.
+liminalkit-test-fonts = { workspace = true }
+
 [lints]
 workspace = true
 
 [features]
-# Embeds two Noto faces for tests, examples and quick starts.
-test-fonts = []
 # Reorders mixed-direction lines (UAX #9) and mirrors brackets in
 # right-to-left runs. Off by default so the crate stays dependency-free;
 # left-to-right output is identical either way.

@@ -19,10 +19,9 @@ zeroize = { workspace = true }
 unicode-segmentation = "1.13.3"
 
 [dev-dependencies]
-liminalkit-text = { workspace = true, features = ["test-fonts"] }
+liminalkit-test-fonts = { workspace = true }
 
 [features]
-test-fonts = ["liminalkit-text/test-fonts"]
 accessibility = ["dep:accesskit"]
 
 [lints]

@@ -10,8 +10,8 @@
 //! cost.
 //!
 //! ```sh
-//! cargo run --release -p liminalkit --features test-fonts --example frame_bench
-//! cargo run --release -p liminalkit --features test-fonts --example frame_bench -- 120
+//! cargo run --release -p liminalkit --example frame_bench
+//! cargo run --release -p liminalkit --example frame_bench -- 120
 //! ```
 //!
 //! This measures liminalkit alone. A comparison against other toolkits on
@@ -20,8 +20,8 @@
 use std::time::Instant;
 
 use liminalkit::prelude::*;
-use liminalkit::text::font::test_fonts::{set, LATIN};
 use liminalkit::ui::{Cell, Column, Row};
+use liminalkit_test_fonts::{set, LATIN};
 
 struct Screen {
     text: TextCache,

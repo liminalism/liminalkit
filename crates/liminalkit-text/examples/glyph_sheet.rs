@@ -1,7 +1,7 @@
 //! Render each face at a range of sizes and report characters it lacks.
 //!
 //! ```sh
-//! cargo run -p liminalkit-text --example glyph_sheet --features test-fonts -- [font.ttf ...]
+//! cargo run -p liminalkit-text --example glyph_sheet -- [font.ttf ...]
 //! ```
 //! With no arguments the two test faces are used. Writes `target/glyph_sheet.png`.
 
@@ -21,19 +21,10 @@ fn main() {
     let mut set = FontSet::new();
     let mut names = Vec::new();
     if args.is_empty() {
-        #[cfg(feature = "test-fonts")]
-        {
-            use liminalkit_text::font::test_fonts;
-            set.add(test_fonts::latin());
-            set.add(test_fonts::thai());
-            names.push("NotoSans-Regular (test)".to_string());
-            names.push("NotoSansThai-Regular (test)".to_string());
-        }
-        #[cfg(not(feature = "test-fonts"))]
-        {
-            eprintln!("pass font paths, or build with --features test-fonts");
-            std::process::exit(2);
-        }
+        set.add(liminalkit_test_fonts::latin());
+        set.add(liminalkit_test_fonts::thai());
+        names.push("NotoSans-Regular (test)".to_string());
+        names.push("NotoSansThai-Regular (test)".to_string());
     } else {
         for path in &args {
             let bytes: &'static [u8] =

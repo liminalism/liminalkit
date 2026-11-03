@@ -1142,12 +1142,13 @@ dependencies = [
 
 [[package]]
 name = "liminalkit"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "accesskit",
  "liminalkit-kms",
  "liminalkit-raster",
  "liminalkit-shell",
+ "liminalkit-test-fonts",
  "liminalkit-text",
  "liminalkit-ui",
  "liminalkit-windowing",
@@ -1155,7 +1156,7 @@ dependencies = [
 
 [[package]]
 name = "liminalkit-kms"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "bytemuck",
  "drm",
@@ -1168,14 +1169,14 @@ dependencies = [
 
 [[package]]
 name = "liminalkit-raster"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "wide",
 ]
 
 [[package]]
 name = "liminalkit-shell"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "arboard",
  "liminalkit-raster",
@@ -1185,21 +1186,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "liminalkit-test-fonts"
+version = "0.5.0"
+dependencies = [
+ "liminalkit-text",
+]
+
+[[package]]
 name = "liminalkit-text"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "liminalkit-raster",
+ "liminalkit-test-fonts",
  "unicode-bidi",
  "unicode-bidi-mirroring",
 ]
 
 [[package]]
 name = "liminalkit-ui"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "accesskit",
  "liminalkit-raster",
  "liminalkit-shell",
+ "liminalkit-test-fonts",
  "liminalkit-text",
  "unicode-segmentation",
  "zeroize",
@@ -1207,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "liminalkit-windowing"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "accesskit",
  "accesskit_winit",

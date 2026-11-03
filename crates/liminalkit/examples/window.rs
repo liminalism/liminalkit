@@ -7,12 +7,12 @@
 //! owned by hand, is `window_lowlevel.rs`.
 //!
 //! ```sh
-//! LIMINALKIT_FRAME_LOG=1 cargo run -p liminalkit --features test-fonts --example window
+//! LIMINALKIT_FRAME_LOG=1 cargo run -p liminalkit --example window
 //! ```
 
 use liminalkit::prelude::*;
-use liminalkit::text::font::test_fonts::{set, LATIN};
 use liminalkit::ui::ButtonStyle;
+use liminalkit_test_fonts::{set, LATIN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Field {

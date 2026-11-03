@@ -13,7 +13,7 @@ its history lives in the source repository:
 | `liminalkit-text/src/{sfnt,layout}.rs` | `thai-text` verbatim |
 | `liminalkit-text/src/{font,text}.rs` | `thai-text`, generalised from two embedded faces to `Face::from_bytes` + `FontSet`, with letter-spacing added |
 | `liminalkit-text/src/cache.rs` | `pos-client-ui/src/text.rs`, keyed by `TextStyle` |
-| `liminalkit-text/test-fonts/` | Noto Sans / Noto Sans Thai (OFL 1.1), test fixtures and examples only |
+| `liminalkit-test-fonts/fonts/` | Noto Sans 2.004 / Noto Sans Thai 2.000 (OFL 1.1), test fixtures and examples only; the crate is never published |
 | `liminalkit-shell/src/input.rs` | `pos-client-ui/src/input.rs` |
 | `liminalkit-windowing/src/host.rs` | `pos-client-ui/src/shell.rs` via `liminalkit-shell/src/shell.rs`, with HiDPI scale tracking and the `Presenter` seam added; the seam follows `Lege-ecosystem/lege-viewer/src/present/mod.rs` |
 | `liminalkit-windowing/src/{panes,windows}.rs` | new |

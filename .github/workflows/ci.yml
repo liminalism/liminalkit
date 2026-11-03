@@ -21,14 +21,14 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit/bidi -- -D warnings
+        run: cargo clippy --workspace --all-targets --features liminalkit/accessibility,liminalkit/bidi -- -D warnings
       - name: Test
-        run: cargo test --workspace --features liminalkit/test-fonts
+        run: cargo test --workspace
       - name: Test with bidi
         run: cargo test -p liminalkit-text --features bidi
       - name: Test with accessibility
-        run: cargo test -p liminalkit -p liminalkit-ui --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit-ui/accessibility
+        run: cargo test -p liminalkit -p liminalkit-ui --features liminalkit/accessibility,liminalkit-ui/accessibility
       - name: Docs
-        run: cargo doc --workspace --no-deps --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit/bidi
+        run: cargo doc --workspace --no-deps --features liminalkit/accessibility,liminalkit/bidi
       - name: Gallery renders
-        run: cargo run -p liminalkit-ui --example gallery --features test-fonts -- 2.0
+        run: cargo run -p liminalkit-ui --example gallery -- 2.0

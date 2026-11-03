@@ -1,7 +1,7 @@
 //! The smallest liminalkit application: a heading, a button, Escape to quit.
 //!
 //! ```sh
-//! cargo run -p liminalkit --features test-fonts --example hello
+//! cargo run -p liminalkit --example hello
 //! ```
 
 use liminalkit::prelude::*;
@@ -32,7 +32,7 @@ impl Screen for Hello {
 fn main() {
     liminalkit::run(
         Hello { clicks: 0 },
-        liminalkit::text::font::test_fonts::set(),
+        liminalkit_test_fonts::set(),
         WindowConfig::new("liminalkit hello", 320.0, 200.0),
     )
     .expect("run");
