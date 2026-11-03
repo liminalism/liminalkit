@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Explicit-state, software-rendered GUI toolkit for Rust: caller-owned state, immediate-mode controls, a pixel buffer, and the same application on a desktop window or a bare Linux display."
-repository = "https://github.com/liminalism/liminalkit"
-readme = "../../README.md"
+description = "Explicit-state, software-rendered GUI toolkit: caller-owned state, immediate-mode controls, CPU pixel-buffer rendering with no GPU, and one application that runs in a desktop window (winit) or on a bare Linux DRM/KMS display. For utilities, dashboards, kiosks and embedded panels."
 keywords = ["gui", "ui", "immediate-mode", "software-rendering", "kiosk"]
 categories = ["gui", "rendering", "embedded"]
+repository = "https://github.com/liminalism/liminalkit"
+readme = "../../README.md"
 
 [dependencies]
 liminalkit-raster = { workspace = true }
@@ -31,6 +31,9 @@ test-fonts = ["liminalkit-text/test-fonts", "liminalkit-ui/test-fonts"]
 accessibility = ["liminalkit-ui/accessibility", "liminalkit-windowing/accessibility", "dep:accesskit"]
 # The Linux DRM/KMS and evdev host, as `liminalkit::kms`.
 kms = ["dep:liminalkit-kms"]
+# Unicode bidirectional reordering and bracket mirroring for right-to-left
+# text in labels, through the `unicode-bidi` crate.
+bidi = ["liminalkit-text/bidi"]
 
 [[example]]
 name = "hello"

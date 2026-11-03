@@ -6,7 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "OS windows for a liminalkit application through winit and softbuffer, plus draggable panes and floating in-app windows."
+description = "Desktop windows for software-rendered GUI applications through winit and softbuffer: multiple OS windows, HiDPI scaling, IME, file drop, optional AccessKit accessibility, draggable panes and floating in-app windows. The desktop host of liminalkit."
+keywords = ["gui", "winit", "softbuffer", "window", "panes"]
+categories = ["gui"]
 
 [dependencies]
 liminalkit-raster = { workspace = true }

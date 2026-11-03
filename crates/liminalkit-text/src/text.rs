@@ -56,32 +56,29 @@ pub fn shape(set: &FontSet, style: TextStyle, text: &str) -> ShapedText {
 /// That is deliberate: a Thai cluster's marks must never be separated from
 /// their base by a run boundary, and since marks are always Thai and always
 /// adjacent to their Thai base, a face split cannot fall inside a cluster.
+///
+/// Runs come out in visual order. Without the `bidi` feature that is the
+/// logical order. With it, a string that holds right-to-left text is resolved
+/// with the Unicode Bidirectional Algorithm (one line at a time, so a wrapped
+/// paragraph is reordered line by line), right-to-left runs are shaped in
+/// reverse with their brackets mirrored, and the runs are placed in display
+/// order. Clusters always index the logical string, so [`ShapedText::fit`]
+/// and [`wrap`] are unaffected.
 pub fn shape_face(set: &FontSet, face_id: FaceId, text: &str) -> ShapedText {
     let mut runs: Vec<TextRun> = Vec::new();
-    let mut current: Option<(&'static Face, usize, usize)> = None;
 
-    for (offset, character) in text.char_indices() {
-        let (face, _) = set.face_for(face_id, character);
-        let end = offset + character.len_utf8();
-        match &mut current {
-            Some((run_face, _, run_end)) if std::ptr::eq(*run_face, face) => {
-                *run_end = end;
+    #[cfg(feature = "bidi")]
+    let spans = bidi::visual_spans(text);
+    #[cfg(not(feature = "bidi"))]
+    let spans: Option<Vec<(std::ops::Range<usize>, bool)>> = None;
+
+    match spans {
+        Some(spans) => {
+            for (range, rtl) in spans {
+                shape_span(set, face_id, text, range, rtl, &mut runs);
             }
-            Some((run_face, start, run_end)) => {
-                runs.push(TextRun {
-                    face: run_face,
-                    glyphs: run_face.shape(&text[*start..*run_end], *start),
-                });
-                current = Some((face, offset, end));
-            }
-            None => current = Some((face, offset, end)),
         }
-    }
-    if let Some((face, start, end)) = current {
-        runs.push(TextRun {
-            face,
-            glyphs: face.shape(&text[start..end], start),
-        });
+        None => shape_span(set, face_id, text, 0..text.len(), false, &mut runs),
     }
 
     let spacing_slots = runs
@@ -97,6 +94,97 @@ pub fn shape_face(set: &FontSet, face_id: FaceId, text: &str) -> ShapedText {
         runs,
         tracking: 0.0,
         spacing_slots,
+    }
+}
+
+/// Shape one directional span of `text`, splitting it by face, and append
+/// its runs to `runs` in visual order.
+fn shape_span(
+    set: &FontSet,
+    face_id: FaceId,
+    text: &str,
+    range: std::ops::Range<usize>,
+    rtl: bool,
+    runs: &mut Vec<TextRun>,
+) {
+    // (face, start, end) in logical order.
+    let mut pieces: Vec<(&'static Face, usize, usize)> = Vec::new();
+    for (offset, character) in text[range.clone()].char_indices() {
+        // A direction control draws nothing and must not split or start a
+        // run; the face's shaper skips it when it falls inside one.
+        if font::is_bidi_control(character) {
+            continue;
+        }
+        let offset = range.start + offset;
+        let (face, _) = set.face_for(face_id, character);
+        let end = offset + character.len_utf8();
+        match pieces.last_mut() {
+            Some((run_face, _, run_end)) if std::ptr::eq(*run_face, face) => *run_end = end,
+            _ => pieces.push((face, offset, end)),
+        }
+    }
+    if rtl {
+        pieces.reverse();
+    }
+    for (face, start, end) in pieces {
+        let glyphs = if rtl {
+            #[cfg(feature = "bidi")]
+            {
+                face.shape_run(&bidi::mirrored(&text[start..end]), start, true)
+            }
+            #[cfg(not(feature = "bidi"))]
+            {
+                face.shape_run(&text[start..end], start, true)
+            }
+        } else {
+            face.shape(&text[start..end], start)
+        };
+        runs.push(TextRun { face, glyphs });
+    }
+}
+
+/// The Unicode Bidirectional Algorithm, through the `unicode-bidi` crate.
+#[cfg(feature = "bidi")]
+mod bidi {
+    use std::ops::Range;
+    use unicode_bidi::BidiInfo;
+
+    /// The line's level runs in display order, each with whether it is
+    /// right-to-left; `None` when nothing in the text is right-to-left, so
+    /// the plain path runs and the output is byte-for-byte what it was
+    /// without the feature.
+    pub fn visual_spans(text: &str) -> Option<Vec<(Range<usize>, bool)>> {
+        if text.is_ascii() {
+            return None;
+        }
+        let info = BidiInfo::new(text, None);
+        if !info.has_rtl() {
+            return None;
+        }
+        let mut spans = Vec::new();
+        for paragraph in &info.paragraphs {
+            let (levels, runs) = info.visual_runs(paragraph, paragraph.range.clone());
+            for run in runs {
+                let rtl = levels[run.start - paragraph.range.start].is_rtl();
+                spans.push((run, rtl));
+            }
+        }
+        Some(spans)
+    }
+
+    /// `text` with every mirrored character replaced by its pair, for a
+    /// right-to-left run: an opening parenthesis typed in Hebrew is drawn
+    /// with the glyph of the closing one. A pair whose UTF-8 lengths differ
+    /// is left alone so clusters keep indexing the original string.
+    pub fn mirrored(text: &str) -> String {
+        text.chars()
+            .map(
+                |character| match unicode_bidi_mirroring::get_mirrored(character) {
+                    Some(pair) if pair.len_utf8() == character.len_utf8() => pair,
+                    _ => character,
+                },
+            )
+            .collect()
     }
 }
 
@@ -541,6 +629,76 @@ mod tests {
         (0..rendered.bitmap.width)
             .filter(|&x| (0..rendered.bitmap.height).any(|y| rendered.bitmap.get(x, y) > 0))
             .collect()
+    }
+
+    #[test]
+    fn a_direction_override_reverses_the_visual_order() {
+        // U+202E forces right-to-left; the glyphs come out c, b, a and the
+        // override itself draws nothing.
+        let shaped = shape("\u{202E}abc");
+        let clusters: Vec<usize> = shaped
+            .runs
+            .iter()
+            .flat_map(|run| run.glyphs.iter().map(|g| g.cluster))
+            .collect();
+        if cfg!(feature = "bidi") {
+            assert_eq!(clusters, vec![5, 4, 3]);
+        } else {
+            assert_eq!(clusters, vec![3, 4, 5]);
+        }
+        assert_eq!(shaped.width(SIZE), shape("abc").width(SIZE));
+    }
+
+    #[test]
+    fn plain_text_is_one_logical_run_either_way() {
+        let shaped = shape("abc");
+        assert_eq!(shaped.runs.len(), 1);
+        let clusters: Vec<usize> = shaped.runs[0].glyphs.iter().map(|g| g.cluster).collect();
+        assert_eq!(clusters, vec![0, 1, 2]);
+    }
+
+    #[cfg(feature = "bidi")]
+    #[test]
+    fn mixed_direction_text_keeps_the_latin_run_in_place() {
+        // RLO ... PDF wraps only the middle; "x" and "y" stay where typed.
+        let text = "x\u{202E}ab\u{202C}y";
+        let shaped = shape(text);
+        let clusters: Vec<usize> = shaped
+            .runs
+            .iter()
+            .flat_map(|run| run.glyphs.iter().map(|g| g.cluster))
+            .collect();
+        let x = 0;
+        let a = 4;
+        let b = 5;
+        let y = 9;
+        assert_eq!(clusters, vec![x, b, a, y]);
+        // Three runs instead of one, so kerning across the boundaries differs
+        // by a fraction of a pixel; the advances are otherwise the same.
+        assert!((shaped.width(SIZE) - shape("xaby").width(SIZE)).abs() < 1.0);
+    }
+
+    #[cfg(feature = "bidi")]
+    #[test]
+    fn brackets_in_a_right_to_left_run_are_mirrored() {
+        let shaped = shape("\u{202E}(a");
+        let glyphs: Vec<u16> = shaped
+            .runs
+            .iter()
+            .flat_map(|run| run.glyphs.iter().map(|g| g.glyph))
+            .collect();
+        // Visual order: a, then the parenthesis, which is drawn as ')'.
+        assert_eq!(glyphs[0], latin().glyph_for('a').unwrap());
+        assert_eq!(glyphs[1], latin().glyph_for(')').unwrap());
+    }
+
+    #[cfg(feature = "bidi")]
+    #[test]
+    fn a_right_to_left_thai_run_keeps_marks_on_their_base() {
+        let shaped = shape("\u{202E}ก\u{0E49}า");
+        assert_eq!(shaped.runs.len(), 1);
+        let clusters: Vec<usize> = shaped.runs[0].glyphs.iter().map(|g| g.cluster).collect();
+        assert_eq!(clusters, vec![9, 3, 6]);
     }
 
     #[test]

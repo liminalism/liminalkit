@@ -6,7 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "XRGB pixel buffer, clipped painter, and analytic anti-aliased coverage for paths and glyphs; PNG, prepared images and tinted SVG icons. The drawing layer of liminalkit."
+description = "2D software rasterizer for GUI drawing: an XRGB pixel buffer, a clipped painter with anti-aliased paths, rounded rectangles and glyph coverage, PNG decoding and encoding, prepared images and tinted SVG icons. No GPU and no unsafe code. The drawing layer of liminalkit."
+keywords = ["rasterizer", "2d-graphics", "software-render", "anti-aliasing", "png"]
+categories = ["rendering", "graphics", "multimedia::images"]
 
 [dependencies]
 wide = "0.7.33"

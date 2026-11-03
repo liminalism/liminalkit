@@ -52,7 +52,7 @@ Plain functions from a rectangle to rectangles, nothing retained: `vstack`/`hsta
 
 ## Text
 
-`liminalkit-text` parses TrueType, applies the OpenType GSUB/GPOS lookups the bundled Latin and Thai faces use (ligatures, kerning, mark attachment), rasterises glyphs with the same analytic coverage kernel as vector paths, and caches shaped and rendered strings by `(text, style)`. The application embeds its faces and registers them in a `FontSet` with fallback chains. It is not a full Unicode shaper: unsupported lookups are skipped, and bidirectional text is not reordered.
+`liminalkit-text` parses TrueType, applies the OpenType GSUB/GPOS lookups the bundled Latin and Thai faces use (ligatures, kerning, mark attachment), rasterises glyphs with the same analytic coverage kernel as vector paths, and caches shaped and rendered strings by `(text, style)`. The application embeds its faces and registers them in a `FontSet` with fallback chains. It is not a full Unicode shaper: unsupported lookups are skipped. Direction marks are never drawn. With the `bidi` feature, `shape` resolves each line with the Unicode Bidirectional Algorithm (`unicode-bidi`), shapes right-to-left runs in reverse with mirrored brackets, and places runs in display order; clusters still index the logical string, so fitting and wrapping are unchanged. Controls measure and edit in logical order, so a caret in right-to-left text sits at the logical prefix's width.
 
 ## Rendering
 

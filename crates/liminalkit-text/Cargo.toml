@@ -6,10 +6,16 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "TrueType parsing, OpenType substitution and positioning, exact-area glyph rasterization and a string cache, with no external dependencies. The text layer of liminalkit."
+description = "Dependency-free font rendering: TrueType and OpenType parsing, GSUB/GPOS shaping with mark positioning and kerning (Thai included), exact-area anti-aliased glyph rasterization, font fallback, line wrapping and a string cache. The text layer of liminalkit."
+keywords = ["truetype", "opentype", "text-shaping", "font", "glyph"]
+categories = ["text-processing", "rendering", "graphics"]
 
 [dependencies]
 liminalkit-raster = { workspace = true }
+# Behind `bidi` only: the Unicode Bidirectional Algorithm and the bracket
+# mirroring table. Neither pulls anything else in.
+unicode-bidi = { version = "0.3.18", optional = true, default-features = false, features = ["std", "hardcoded-data"] }
+unicode-bidi-mirroring = { version = "0.2", optional = true }
 
 [lints]
 workspace = true
@@ -17,3 +23,7 @@ workspace = true
 [features]
 # Embeds two Noto faces for tests, examples and quick starts.
 test-fonts = []
+# Reorders mixed-direction lines (UAX #9) and mirrors brackets in
+# right-to-left runs. Off by default so the crate stays dependency-free;
+# left-to-right output is identical either way.
+bidi = ["dep:unicode-bidi", "dep:unicode-bidi-mirroring"]

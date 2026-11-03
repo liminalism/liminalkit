@@ -6,7 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "Immediate-mode controls with caller-owned state and no widget tree: buttons, tabs, forms, text fields, dropdowns, tables, lists, toasts and stateless layout. The controls of liminalkit."
+description = "Immediate-mode GUI controls with caller-owned state and no widget tree: buttons, tabs, forms, text fields, text areas, dropdowns, menus, dialogs, tables, lists, drag and drop, toasts, stateless layout and optional AccessKit accessibility. The controls of liminalkit."
+keywords = ["gui", "immediate-mode", "widgets", "ui", "accessibility"]
+categories = ["gui", "accessibility"]
 
 [dependencies]
 liminalkit-raster = { workspace = true }

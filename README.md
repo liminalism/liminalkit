@@ -6,6 +6,10 @@ liminalkit is for applications that need direct control over drawing, interactio
 
 Source: <https://github.com/liminalism/liminalkit>. Not yet published to crates.io.
 
+![The control gallery, rendered by the software rasterizer with no window](docs/screenshots/gallery.png)
+
+That image is `cargo run -p liminalkit-ui --example gallery --features test-fonts`: every control the toolkit ships, drawn into a pixel buffer and written out as PNG by the toolkit's own encoder.
+
 ## Why this and not egui, Dioxus, or Freya
 
 - **State lives in your structs.** A control is a function: it takes a rectangle and `&mut` to its state, draws, and returns what happened. Nothing is hashed, nothing is looked up by a name that could collide, and reordering a screen cannot move state to the wrong control. egui is also immediate-mode but keeps interaction state and widget ids inside the framework.
@@ -13,7 +17,7 @@ Source: <https://github.com/liminalism/liminalkit>. Not yet published to crates.
 - **Two hosts, one application.** `run_app` opens a winit window and presents through softbuffer. `run_kms` runs the same application full screen on a bare Linux display with evdev multi-touch and no window system.
 - **A small number of understandable abstractions.** Every piece of state a control needs is a parameter. A convenient API is welcome; a hidden mechanism that undermines predictability needs a strong reason.
 
-What it does not try to be: a universal application framework. Layout is written by the application with stateless solvers, not by a constraint engine. Text shaping covers the lookups the bundled Latin and Thai fonts use, not all of Unicode. The widget set is the one an operational screen is made of.
+What it does not try to be: a universal application framework. Layout is written by the application with stateless solvers, not by a constraint engine. Text shaping covers the lookups the bundled Latin and Thai fonts use, not all of Unicode; right-to-left text is reordered only behind a feature. The widget set is the one an operational screen is made of.
 
 ## Quick start
 
@@ -99,9 +103,9 @@ Raster and text do not know about either host. The shell is what they share with
 
 | Crate | Role |
 |---|---|
-| [`liminalkit`](crates/liminalkit) | The front door: re-exports the crates below as `liminalkit::{raster, text, shell, ui, windowing, kms}`, plus `App` and `Screen`. Features: `test-fonts`, `accessibility`, `kms`. |
+| [`liminalkit`](crates/liminalkit) | The front door: re-exports the crates below as `liminalkit::{raster, text, shell, ui, windowing, kms}`, plus `App` and `Screen`. Features: `test-fonts`, `accessibility`, `kms`, `bidi`. |
 | [`liminalkit-raster`](crates/liminalkit-raster) | An XRGB buffer, a clipped painter, and analytic coverage for paths and glyphs. PNG, images prepared once for the size they are drawn at, and SVG icons rasterized once and tinted. |
-| [`liminalkit-text`](crates/liminalkit-text) | TrueType faces, the OpenType substitutions and positioning this stack implements, wrapping, and a string cache. |
+| [`liminalkit-text`](crates/liminalkit-text) | TrueType faces, the OpenType substitutions and positioning this stack implements, fallback, wrapping, and a string cache. `bidi` adds Unicode bidirectional reordering. |
 | [`liminalkit-shell`](crates/liminalkit-shell) | `Input`, `Scale`, `Presenter`, the clipboard, and touch contacts. |
 | [`liminalkit-ui`](crates/liminalkit-ui) | Immediate-mode controls over those three, keyboard focus, and stateless layout. |
 | [`liminalkit-windowing`](crates/liminalkit-windowing) | OS windows, draggable panes, and floating in-app windows. `winit` and `softbuffer` stay here. |
@@ -111,7 +115,7 @@ The workspace forbids `unsafe`. Rust 1.85 or newer.
 
 Drawing is fills, strokes, and closed paths under the non-zero or even-odd rule, plus bitmaps and prepared images. Coverage for vectors and glyphs is the same analytic kernel. Fast paths are checked byte for byte against a scalar specification. `LIMINALKIT_SIMD=scalar` turns them off. Time them on the device.
 
-Text shaping covers the lookups used by the bundled Latin and Thai sample fonts, including ligatures, kerning, and mark attachment. It is not a full Unicode shaper. Unsupported lookups are skipped. A text field edits on extended-grapheme boundaries and keeps the stored UTF-8 un-normalized. Committed key text is applied to `TextFieldState`. IME preedit is painted from `Input`.
+Text shaping covers the lookups used by the bundled Latin and Thai sample fonts, including ligatures, kerning, and mark attachment. It is not a full Unicode shaper. Unsupported lookups are skipped. Direction marks and embeddings are never drawn. With the `bidi` feature, a line that holds right-to-left text is resolved with the Unicode Bidirectional Algorithm through `unicode-bidi`: right-to-left runs are shaped in reverse with their brackets mirrored, and runs are drawn in display order. Left-to-right output is identical with the feature off. Text fields edit in logical order and place the caret at the logical prefix's width, so they are right for left-to-right text only. A text field edits on extended-grapheme boundaries and keeps the stored UTF-8 un-normalized. Committed key text is applied to `TextFieldState`. IME preedit is painted from `Input`.
 
 The controls are the ones an operational screen is made of: labels, buttons, tabs, checkboxes, toggles, radios, dropdowns, context menus, single- and multi-line text fields, modal dialogs and popovers, drag and drop, and tables and lists that draw only the visible rows. `Theme` holds semantic colours and sizes. `OperationalPalette` is a shared light and dark vocabulary, so screens can differ in layout and still belong to one installation. Chrome that mixes several meanings on one screen takes its colours as arguments. Tooltips are requested while drawing and painted after the rest of the frame, so they sit above it.
 
@@ -145,6 +149,7 @@ existing device readers.
 
 ```sh
 cargo test --workspace --features liminalkit/test-fonts
+cargo test -p liminalkit-text --features bidi
 
 # Gallery to target/gallery@1x.png (or @2x.png), with no window; an optional scale factor
 cargo run -p liminalkit-ui --example gallery --features test-fonts
@@ -171,7 +176,7 @@ cargo run -p liminalkit --features test-fonts --example touch_tuning
 cargo run -p liminalkit-kms --example probe
 ```
 
-`test-fonts` embeds Noto Sans and Noto Sans Thai for examples and tests. Application builds leave it off. Font details are in [`crates/liminalkit-text/test-fonts/README.md`](crates/liminalkit-text/test-fonts/README.md).
+`test-fonts` embeds Noto Sans and Noto Sans Thai for examples and tests. Application builds leave it off. `bidi` is the only feature that adds a dependency to the text crate; a left-to-right build does not need it. Font details are in [`crates/liminalkit-text/test-fonts/README.md`](crates/liminalkit-text/test-fonts/README.md).
 
 `LIMINALKIT_FRAME_LOG=1` prints p50, p95, and maximum timings for the phases the shell was given. `frame_bench` renders one busy screen headlessly at several resolutions and prints the cost of a full redraw; software rendering scales with pixels, and this is where to see by how much on a given machine.
 

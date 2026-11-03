@@ -6,7 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "The Linux DRM/KMS and evdev host for a liminalkit application: full screen on a bare display with multi-touch and no window system."
+description = "Run a software-rendered GUI full screen on a bare Linux display with no window system: DRM/KMS scan-out, evdev keyboard and multi-touch input, for kiosks, appliances and Raspberry Pi. The embedded host of liminalkit."
+keywords = ["drm", "kms", "evdev", "kiosk", "raspberry-pi"]
+categories = ["embedded", "os::linux-apis", "hardware-support"]
 
 [dependencies]
 liminalkit-raster = { workspace = true }

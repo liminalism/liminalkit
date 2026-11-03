@@ -121,11 +121,26 @@ impl Face {
         self.gdef.is_mark(glyph)
     }
 
-    /// Turn text into positioned glyphs, in design units.
+    /// Turn text into positioned glyphs, in design units, left to right.
     ///
     /// `cluster_base` is added to every glyph's cluster, so a caller shaping
     /// several runs of one string gets clusters that index the whole string.
     pub fn shape(&self, text: &str, cluster_base: usize) -> Vec<ShapedGlyph> {
+        self.shape_run(text, cluster_base, false)
+    }
+
+    /// Turn one directional run into positioned glyphs, in design units.
+    ///
+    /// A right-to-left run comes out in visual order: substitution happens in
+    /// logical order, then the buffer is reversed one base-plus-marks group at
+    /// a time (a mark stays after the base it attaches to), and positioning
+    /// runs over the visual sequence. That is the order OpenType pair and
+    /// mark lookups in a right-to-left font expect, and it is what a full
+    /// shaper does.
+    ///
+    /// Which runs are right-to-left is the caller's business; with the
+    /// `bidi` feature [`crate::text::shape`] works it out per line.
+    pub fn shape_run(&self, text: &str, cluster_base: usize, rtl: bool) -> Vec<ShapedGlyph> {
         let mut glyphs = self.map_characters(text, cluster_base);
 
         if let Some(gsub) = &self.gsub {
@@ -136,10 +151,30 @@ impl Face {
         for glyph in &mut glyphs {
             glyph.x_advance = self.advance(glyph.glyph);
         }
+        if rtl {
+            self.reverse_groups(&mut glyphs);
+        }
         if let Some(gpos) = &self.gpos {
             layout::apply_positioning(gpos, &self.gdef, &self.positioning_lookups, &mut glyphs);
         }
         glyphs
+    }
+
+    /// Reverse a glyph buffer keeping each base with the marks that follow it.
+    fn reverse_groups(&self, glyphs: &mut [ShapedGlyph]) {
+        let mut groups: Vec<(usize, usize)> = Vec::new();
+        for (index, glyph) in glyphs.iter().enumerate() {
+            match groups.last_mut() {
+                Some((_, end)) if self.is_mark(glyph.glyph) => *end = index + 1,
+                _ => groups.push((index, index + 1)),
+            }
+        }
+        let reordered: Vec<ShapedGlyph> = groups
+            .iter()
+            .rev()
+            .flat_map(|&(start, end)| glyphs[start..end].iter().copied())
+            .collect();
+        glyphs.copy_from_slice(&reordered);
     }
 
     /// Map characters to glyphs, applying the one reordering the font's own
@@ -151,6 +186,14 @@ impl Face {
         let mut index = 0;
         while index < characters.len() {
             let (offset, character) = characters[index];
+
+            // Direction marks and embeddings say how a line is ordered and
+            // have no glyph of their own; a `.notdef` box for one would be
+            // wrong in every font.
+            if is_bidi_control(character) {
+                index += 1;
+                continue;
+            }
 
             // SARA AM (ำ) is a single character that renders as two marks: a
             // NIKHAHIT above and a SARA AA beside. When a tone mark was typed
@@ -195,6 +238,16 @@ impl Face {
     fn glyph_character(&self, glyph: u16) -> Option<char> {
         ('\u{0E00}'..='\u{0E7F}').find(|&candidate| self.glyph_for(candidate) == Some(glyph))
     }
+}
+
+/// The Unicode bidirectional format characters: marks, embeddings, overrides
+/// and isolates (U+061C, U+200E, U+200F, U+202A..=U+202E, U+2066..=U+2069).
+/// They are default-ignorable and are never drawn.
+pub fn is_bidi_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+    )
 }
 
 /// U+0E33 THAI CHARACTER SARA AM.
@@ -385,6 +438,35 @@ pub mod test_fonts {
 mod tests {
     use super::test_fonts::*;
     use super::*;
+
+    #[test]
+    fn a_direction_mark_has_no_glyph() {
+        let plain = latin().shape("ab", 0);
+        let marked = latin().shape("a\u{200F}b", 0);
+        assert_eq!(marked.len(), plain.len());
+        assert_eq!(
+            marked.iter().map(|g| g.glyph).collect::<Vec<_>>(),
+            plain.iter().map(|g| g.glyph).collect::<Vec<_>>()
+        );
+        // Clusters still index the original string.
+        assert_eq!(marked[1].cluster, 4);
+    }
+
+    #[test]
+    fn a_right_to_left_run_is_reversed_by_base_and_marks() {
+        // ก + tone mark + า: the mark must stay with ก after the reversal.
+        let glyphs = thai().shape_run("ก\u{0E49}า", 0, true);
+        let clusters: Vec<usize> = glyphs.iter().map(|g| g.cluster).collect();
+        assert_eq!(clusters, vec![6, 0, 3]);
+        assert!(thai().is_mark(glyphs[2].glyph));
+    }
+
+    #[test]
+    fn a_left_to_right_run_keeps_logical_order() {
+        let glyphs = latin().shape_run("abc", 10, false);
+        let clusters: Vec<usize> = glyphs.iter().map(|g| g.cluster).collect();
+        assert_eq!(clusters, vec![10, 11, 12]);
+    }
 
     #[test]
     fn both_fixture_faces_parse() {

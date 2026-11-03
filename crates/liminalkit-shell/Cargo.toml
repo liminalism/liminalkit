@@ -6,7 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "What a window host and a liminalkit application share: per-frame input, logical-to-physical scale, the presenter seam, touch contacts and the clipboard."
+description = "The contract between a window host and a software-rendered GUI: per-frame keyboard, mouse and multi-touch input, HiDPI logical-to-device scaling, the presenter seam, touch gestures and scroll physics, and a clipboard for X11, Wayland and macOS. Shared by every liminalkit host."
+keywords = ["gui", "input", "clipboard", "hidpi", "touch"]
+categories = ["gui"]
 
 [dependencies]
 liminalkit-raster = { workspace = true }
