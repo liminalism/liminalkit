@@ -173,7 +173,7 @@ record pixelkit.work.public-docs/1 : work {
         Add to the README a screenshot of a real Lege screen and of a kiosk screen on a Pi, and the gallery render. Write docs/ARCHITECTURE.md (the crates, the frame lifecycle, units, focus, the two hosts, the presenter seam) and a short tutorial that grows hello.rs into a form with a table and a dropdown. Give every crate a README and a lib.rs doc that answers what it is for and what it is not, written for someone who has not read the others. Make RUSTDOCFLAGS=-D warnings clean for the whole workspace and keep it clean in CI.
         """
     note """
-        Done 2026-11-03: docs/ARCHITECTURE.md; docs/TUTORIAL.md with its compiled counterpart crates/liminalkit/examples/tutorial.rs; a warnings-clean rustdoc for the whole workspace; .github/workflows/ci.yml running fmt, clippy -D warnings, tests with and without accessibility, docs, and the gallery render (written, not yet observed running on GitHub). Still open: the screenshots (need a Lege build and a Pi) and per-crate READMEs.
+        Done 2026-11-03: docs/ARCHITECTURE.md; docs/TUTORIAL.md with its compiled counterpart crates/liminalkit/examples/tutorial.rs; a README per component crate (what it is for, what it is not, who uses it) referenced from each Cargo.toml; a warnings-clean rustdoc for the whole workspace; .github/workflows/ci.yml running fmt, clippy -D warnings, tests with and without accessibility, docs, and the gallery render (written, not yet observed running on GitHub). Still open: the screenshots of a real Lege screen and a kiosk on a Pi, which need those builds and that hardware.
         """
     after [ @pixelkit.work.adoptability-pass ]
     source {

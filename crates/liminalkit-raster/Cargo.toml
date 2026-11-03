@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "XRGB pixel buffer, clipped painter, and analytic anti-aliased coverage for paths and glyphs; PNG, prepared images and tinted SVG icons. The drawing layer of liminalkit."
 
 [dependencies]

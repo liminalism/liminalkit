@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Immediate-mode controls with caller-owned state and no widget tree: buttons, tabs, forms, text fields, dropdowns, tables, lists, toasts and stateless layout. The controls of liminalkit."
 
 [dependencies]

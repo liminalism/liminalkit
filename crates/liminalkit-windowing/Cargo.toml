@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "OS windows for a liminalkit application through winit and softbuffer, plus draggable panes and floating in-app windows."
 
 [dependencies]

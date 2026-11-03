@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:808de5cd30f0ba4b374f8e6fd7821caaab7a8cf52c55a5ac18967bef051d565c"
+    source_graph "sha256:42b159ee17161189063325d6cd8edac90cb17caa7610137ea8e70d112edd1e3e"
 }
 
 source ".akr/project.akr" {
@@ -39,7 +39,7 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:df4f472bcb911cabb6e791b9ce8510ca72aa6cb410a1d333f553baef20ad0f43"
+    hash "sha256:79236f531afbc426a24f17e2eb1e060913f73e080e8d93e4867ad88e1bd4cbf8"
     records 13
 }
 
@@ -130,7 +130,7 @@ resolution @pixelkit.work.publish-packaging/1 {
 resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.public-docs/1
-    hash "sha256:f999d3363a7a1e6f5ef6ddf36370d5af581831067fbe806852b2bf068f22f5fe"
+    hash "sha256:71c6fb01f77bb82f5625f4c6a369d6c0fd946948b7dcef2d4434addf3904000e"
 }
 
 resolution @pixelkit.work.text-shaping-fallback/1 {

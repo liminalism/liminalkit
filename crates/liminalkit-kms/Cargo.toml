@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "The Linux DRM/KMS and evdev host for a liminalkit application: full screen on a bare display with multi-touch and no window system."
 
 [dependencies]
