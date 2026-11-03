@@ -7,88 +7,109 @@
 
 use std::time::{Duration, Instant};
 
-pub struct Pacer {
-    frame: Duration,
-    dirty: bool,
-    flip_pending: bool,
-    /// The application's next deadline, for intervals longer than a frame.
-    next_tick: Option<Instant>,
-    /// The application asked for frames at (about) the refresh rate.
-    continuous: bool,
+/// A pending flip must complete or fail the host instead of sleeping forever.
+const FLIP_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone, Copy)]
+enum FramePolicy {
+    OnDemand,
+    Continuous,
+    Deadline { due: Instant, interval: Duration },
+}
+struct Submitted<T> {
+    at: Instant,
+    frame: T,
 }
 
-impl Pacer {
-    pub fn new(refresh_hz: u32) -> Pacer {
-        Pacer {
+pub struct Pacer<T> {
+    frame: Duration,
+    dirty: bool,
+    in_flight: Option<Submitted<T>>,
+    policy: FramePolicy,
+}
+
+impl<T> Pacer<T> {
+    pub fn new(refresh_hz: u32) -> Self {
+        Self {
             frame: Duration::from_secs(1) / refresh_hz.clamp(1, 1000),
-            // The first frame replaces the black the display started with.
             dirty: true,
-            flip_pending: false,
-            next_tick: None,
-            continuous: false,
+            in_flight: None,
+            policy: FramePolicy::OnDemand,
         }
     }
-
-    /// Something changed: draw when the display can take a frame.
     pub fn invalidate(&mut self) {
         self.dirty = true;
     }
 
-    /// Take the application's `animation_interval` after its tick.
     pub fn schedule(&mut self, now: Instant, interval: Option<Duration>) {
-        match interval {
-            None => {
-                self.continuous = false;
-                self.next_tick = None;
-            }
-            // Anything up to a frame and a half is "every frame": the flip
-            // paces it, not a timer that would beat against the refresh.
+        self.policy = match interval {
+            None => FramePolicy::OnDemand,
             Some(interval) if interval <= self.frame * 3 / 2 => {
-                self.next_tick = None;
-                if !self.continuous {
-                    self.continuous = true;
+                if !matches!(self.policy, FramePolicy::Continuous) {
                     self.dirty = true;
                 }
+                FramePolicy::Continuous
             }
             Some(interval) => {
-                self.continuous = false;
-                match self.next_tick {
-                    Some(due) if now < due => {}
-                    Some(_) => {
-                        self.dirty = true;
-                        self.next_tick = Some(now + interval);
+                let due = match self.policy {
+                    FramePolicy::Deadline {
+                        due,
+                        interval: previous,
+                    } if previous == interval => {
+                        if now < due {
+                            due
+                        } else {
+                            self.dirty = true;
+                            now + interval
+                        }
                     }
-                    None => self.next_tick = Some(now + interval),
-                }
+                    _ => now + interval,
+                };
+                FramePolicy::Deadline { due, interval }
             }
-        }
+        };
     }
-
     pub fn should_render(&self) -> bool {
-        self.dirty && !self.flip_pending
+        self.dirty && self.in_flight.is_none()
     }
 
-    pub fn rendered(&mut self) {
+    /// Commit only after the display accepted submission. Timing ownership and
+    /// the pending state move together, and duplicate submissions are rejected.
+    pub fn rendered(&mut self, frame: T, now: Instant) {
+        assert!(
+            self.should_render(),
+            "a frame can only be submitted when ready"
+        );
         self.dirty = false;
-        self.flip_pending = true;
+        self.in_flight = Some(Submitted { at: now, frame });
     }
-
-    /// The frame reached the glass.
-    pub fn flipped(&mut self) {
-        self.flip_pending = false;
-        if self.continuous {
+    pub fn flipped(&mut self) -> Option<T> {
+        let submitted = self.in_flight.take()?;
+        if matches!(self.policy, FramePolicy::Continuous) {
             self.dirty = true;
         }
+        Some(submitted.frame)
     }
-
-    /// How long `poll` may sleep: zero when a frame is owed and can be
-    /// drawn, until the deadline when one is set, otherwise forever (`None`).
-    /// While a flip is pending the display's own event ends the wait.
+    pub fn stalled(&self, now: Instant) -> bool {
+        self.in_flight
+            .as_ref()
+            .is_some_and(|submitted| now.saturating_duration_since(submitted.at) >= FLIP_TIMEOUT)
+    }
     pub fn timeout(&self, now: Instant) -> Option<Duration> {
         if self.should_render() {
             return Some(Duration::ZERO);
         }
-        self.next_tick.map(|due| due.saturating_duration_since(now))
+        let deadline = match self.policy {
+            FramePolicy::Deadline { due, .. } => Some(due.saturating_duration_since(now)),
+            _ => None,
+        };
+        let flip = self.in_flight.as_ref().map(|submitted| {
+            FLIP_TIMEOUT.saturating_sub(now.saturating_duration_since(submitted.at))
+        });
+        match (deadline, flip) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 }
 
@@ -102,8 +123,12 @@ mod tests {
         let mut p = Pacer::new(60);
         p.schedule(now, None);
         assert!(p.should_render(), "the first frame");
-        p.rendered();
-        assert_eq!(p.timeout(now), None, "waiting on the flip only");
+        p.rendered((), now);
+        assert_eq!(
+            p.timeout(now),
+            Some(FLIP_TIMEOUT),
+            "flip completion has a watchdog"
+        );
         p.flipped();
         assert!(!p.should_render());
         assert_eq!(p.timeout(now), None, "idle: no wakeups at all");
@@ -116,13 +141,13 @@ mod tests {
         let now = Instant::now();
         let mut p = Pacer::new(60);
         p.schedule(now, None);
-        p.rendered();
+        p.rendered((), now);
         p.invalidate();
         p.invalidate();
         assert!(!p.should_render(), "one frame in flight");
         p.flipped();
         assert!(p.should_render(), "drawn from the newest state");
-        p.rendered();
+        p.rendered((), now);
         p.flipped();
         assert!(!p.should_render(), "two inputs, one owed frame");
     }
@@ -132,19 +157,19 @@ mod tests {
         let now = Instant::now();
         let mut p = Pacer::new(60);
         p.schedule(now, None);
-        p.rendered();
+        p.rendered((), now);
         p.flipped();
         p.schedule(now, Some(Duration::from_millis(16)));
         assert!(p.should_render());
         for _ in 0..3 {
-            p.rendered();
+            p.rendered((), now);
             assert!(!p.should_render());
             p.flipped();
             p.schedule(now, Some(Duration::from_millis(16)));
             assert!(p.should_render(), "every flip owes the next frame");
         }
         p.schedule(now, None);
-        p.rendered();
+        p.rendered((), now);
         p.flipped();
         assert!(!p.should_render(), "stops when the animation does");
     }
@@ -154,7 +179,7 @@ mod tests {
         let now = Instant::now();
         let mut p = Pacer::new(60);
         p.schedule(now, None);
-        p.rendered();
+        p.rendered((), now);
         p.flipped();
         p.schedule(now, Some(Duration::from_secs(25)));
         assert_eq!(p.timeout(now), Some(Duration::from_secs(25)));
@@ -163,5 +188,32 @@ mod tests {
         p.schedule(later, Some(Duration::from_secs(25)));
         assert!(p.should_render(), "due");
         assert_eq!(p.timeout(later), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn completion_owns_timing_once_and_missing_completion_has_a_deadline() {
+        let now = Instant::now();
+        let mut p = Pacer::new(60);
+        p.rendered("frame timing", now);
+        p.invalidate();
+        assert!(!p.should_render());
+        assert!(!p.stalled(now + FLIP_TIMEOUT - Duration::from_millis(1)));
+        assert!(p.stalled(now + FLIP_TIMEOUT));
+        assert_eq!(p.timeout(now + FLIP_TIMEOUT), Some(Duration::ZERO));
+        assert_eq!(p.flipped(), Some("frame timing"));
+        assert_eq!(p.flipped(), None);
+        assert!(p.should_render());
+        assert!(!p.stalled(now + FLIP_TIMEOUT));
+    }
+
+    #[test]
+    fn changing_deadline_policy_replaces_the_previous_interval() {
+        let now = Instant::now();
+        let mut p = Pacer::new(60);
+        p.rendered((), now);
+        p.flipped();
+        p.schedule(now, Some(Duration::from_secs(60)));
+        p.schedule(now, Some(Duration::from_secs(1)));
+        assert_eq!(p.timeout(now), Some(Duration::from_secs(1)));
     }
 }

@@ -98,8 +98,8 @@ enum Node<T> {
 #[derive(Debug, Clone)]
 struct PaneDrag {
     /// Path to the split node: `false` steps into `first`, `true` into
-    /// `second`. Revalidated every frame, so restructuring mid-drag cancels
-    /// the drag instead of moving a stranger.
+    /// `second`. Structural mutations cancel capture; path validation also guards
+    /// against a missing or changed split.
     path: Vec<bool>,
     axis: Axis,
     /// Press position minus divider position along the axis, so the divider
@@ -155,6 +155,7 @@ impl<T> Panes<T> {
         );
         self.root = Some(root);
         if placed {
+            self.drag = None;
             self.next_id = self.next_id.wrapping_add(1);
             Some(new_id)
         } else {
@@ -173,6 +174,9 @@ impl<T> Panes<T> {
         }
         let (root, removed) = remove_node(root, id);
         self.root = root;
+        if removed.is_some() {
+            self.drag = None;
+        }
         removed
     }
 
@@ -1023,6 +1027,37 @@ mod tests {
             CursorShape::Default,
             "nothing left to drag"
         );
+    }
+
+    #[test]
+    fn replacing_a_captured_split_with_the_same_axis_cancels_capture() {
+        let mut panes = Panes::new("A");
+        let a = panes.panes(AREA)[0].0;
+        let b = panes.split(a, Side::Right, "B", 0.5).unwrap();
+        panes.split(b, Side::Right, "C", 0.5).unwrap();
+        let mut input = Input::new();
+        press(&mut input, 200.0, 150.0);
+        panes.update(&mut input, AREA, metrics());
+        input.end_frame();
+        panes.remove(a);
+        let before = panes.rect(b, AREA);
+        input.cursor_moved(300.0, 150.0);
+        panes.update(&mut input, AREA, metrics());
+        assert_eq!(panes.rect(b, AREA), before);
+    }
+
+    #[test]
+    fn splitting_during_capture_cancels_but_unknown_mutations_do_not() {
+        let mut panes = Panes::new("A");
+        let a = panes.panes(AREA)[0].0;
+        let b = panes.split(a, Side::Right, "B", 0.5).unwrap();
+        let mut input = Input::new();
+        press(&mut input, 200.0, 150.0);
+        panes.update(&mut input, AREA, metrics());
+        panes.remove(PaneId(999));
+        assert!(panes.drag.is_some());
+        panes.split(b, Side::Bottom, "C", 0.5).unwrap();
+        assert!(panes.drag.is_none());
     }
 
     #[test]

@@ -1,5 +1,5 @@
-//! EXPERIMENTAL / UNTESTED: regression cases supplied for later execution.
-//! These tests were compile-checked only when the feature was introduced.
+//! Headless regression cases for the experimental interaction layer.
+//! These exercise transitions and physics, not hardware or touch feel.
 use liminalkit_shell::gesture::{Gesture, GestureConfig, GestureRecognizer};
 use liminalkit_shell::scroll_physics::{Boundary, ScrollAxis, ScrollConfig, ScrollMotion};
 use liminalkit_shell::touch_replay::{ReplayCursor, TouchRecording};
@@ -90,7 +90,7 @@ fn multi_finger_transition_rebases_and_never_taps() {
     g.update(touch(epoch, 0, TouchPhase::Started, 10.0));
     let mut second = touch(epoch, 10, TouchPhase::Started, 100.0);
     second.id.contact = 8;
-    assert!(g.update(second).contains(&Gesture::Cancelled));
+    assert_eq!(g.update(second), vec![Gesture::TransformStarted]);
     second.phase = TouchPhase::Moved;
     second.position.1 = 120.0;
     second.received_at += Duration::from_millis(10);
@@ -108,6 +108,23 @@ fn multi_finger_transition_rebases_and_never_taps() {
         g.update(touch(epoch, 50, TouchPhase::Ended, 12.0)),
         vec![Gesture::Released]
     );
+}
+
+#[test]
+fn transform_handoff_is_distinct_from_session_cancellation() {
+    let epoch = Instant::now();
+    let mut g = recognizer();
+    g.update(touch(epoch, 0, TouchPhase::Started, 10.0));
+    let mut second = touch(epoch, 10, TouchPhase::Started, 100.0);
+    second.id.contact = 8;
+    assert_eq!(g.update(second), [Gesture::TransformStarted]);
+    assert!(g.active());
+    let mut third = touch(epoch, 20, TouchPhase::Started, 200.0);
+    third.id.contact = 9;
+    assert!(g.update(third).is_empty(), "already transforming");
+    assert_eq!(g.cancel(), [Gesture::Cancelled, Gesture::Released]);
+    assert!(!g.active());
+    assert!(g.cancel().is_empty());
 }
 #[test]
 fn cancelled_or_stale_terminal_events_never_activate_or_fling() {

@@ -12,6 +12,7 @@
 //! palm rejection or gesture arbitration to want from it, and reading evdev
 //! directly keeps the host free of C libraries.
 
+use std::collections::BTreeSet;
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd};
 use std::path::{Path, PathBuf};
@@ -104,27 +105,69 @@ pub fn discover(
     explicit: Option<&Path>,
     base: TouchMapping,
     next_id: &mut u64,
+    known: &BTreeSet<PathBuf>,
 ) -> Vec<TouchDevice> {
-    let mut found = Vec::new();
-    let mut take = |path: &Path, device: RawDevice, require_direct: bool| {
-        if let Some(touch) = TouchDevice::open(path, device, *next_id, base, require_direct) {
-            *next_id += 1;
-            found.push(touch);
-        }
+    let candidates: Vec<_> = match explicit {
+        // A deliberately named path need not advertise INPUT_PROP_DIRECT.
+        Some(path) if !known.contains(path) => RawDevice::open(path)
+            .ok()
+            .map(|device| vec![(path.to_owned(), device)])
+            .unwrap_or_default(),
+        Some(_) => Vec::new(),
+        None => evdev::raw_stream::enumerate().collect(),
     };
-    match explicit {
-        // Named on purpose: trust it even without the direct property, which
-        // a few USB bridges leave off.
-        Some(path) => {
-            if let Ok(device) = RawDevice::open(path) {
-                take(path, device, false);
+    open_new_devices(candidates, known, |path, device| {
+        let touch = TouchDevice::open(path, device, *next_id, base, explicit.is_none())?;
+        *next_id += 1;
+        Some(touch)
+    })
+}
+
+/// Reconcile candidate identities before assigning logical IDs or retaining
+/// device handles. Existing readers are never replaced by a rescan.
+fn open_new_devices<T, D>(
+    candidates: impl IntoIterator<Item = (PathBuf, T)>,
+    known: &BTreeSet<PathBuf>,
+    mut open: impl FnMut(&Path, T) -> Option<D>,
+) -> Vec<D> {
+    let mut seen = known.clone();
+    candidates
+        .into_iter()
+        .filter_map(|(path, candidate)| {
+            if !seen.insert(path.clone()) {
+                return None;
             }
-        }
-        None => {
-            for (path, device) in evdev::raw_stream::enumerate() {
-                take(&path, device, true);
-            }
-        }
+            open(&path, candidate)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rescanning_opens_only_new_devices_and_reconnects_removed_ones() {
+        let a = PathBuf::from("/dev/input/event1");
+        let b = PathBuf::from("/dev/input/event2");
+        let mut known = BTreeSet::from([a.clone()]);
+        let mut next_id = 7;
+        let mut scan = |known: &BTreeSet<PathBuf>| {
+            open_new_devices(
+                [(a.clone(), ()), (b.clone(), ()), (b.clone(), ())],
+                known,
+                |path, ()| {
+                    let id = next_id;
+                    next_id += 1;
+                    Some((path.to_owned(), id))
+                },
+            )
+        };
+        let added = scan(&known);
+        assert_eq!(added, [(b.clone(), 7)]);
+        known.insert(b.clone());
+        assert!(scan(&known).is_empty());
+        known.remove(&a);
+        assert_eq!(scan(&known), [(a, 8)]);
     }
-    found
 }

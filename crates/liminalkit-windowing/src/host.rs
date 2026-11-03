@@ -449,9 +449,7 @@ impl WindowConfig {
 struct Slot {
     app: Box<dyn PixelApp>,
     config: WindowConfig,
-    window: Option<Arc<Window>>,
-    winit_id: Option<WinitWindowId>,
-    presenter: Option<Box<dyn Presenter>>,
+    native: NativeState,
     /// A one-shot factory for this slot's presenter, from
     /// [`run_app_with_presenter`]. Taken when the window is created.
     presenter_factory: Option<PresenterFactory>,
@@ -471,12 +469,54 @@ struct Slot {
     next_tick: Option<Instant>,
     /// The pointer shape last set on the window.
     cursor_shape: CursorShape,
+}
+
+/// Window and presenter are published together only after successful creation.
+enum NativeState {
+    Pending,
+    Ready(NativeResources),
+}
+impl NativeState {
+    fn window(&self) -> Option<&Window> {
+        match self {
+            Self::Pending => None,
+            Self::Ready(native) => Some(&native.window),
+        }
+    }
+}
+
+struct NativeResources {
+    // Surface/adapter drop before the window that owns their native handles.
+    surface: Surface,
     #[cfg(feature = "accessibility")]
-    accessibility: Option<accesskit_winit::Adapter>,
-    /// Whether the application has published a tree, so updates are pushed
-    /// only to a tree that exists.
+    accessibility: accesskit_winit::Adapter,
     #[cfg(feature = "accessibility")]
     tree_published: bool,
+    window: Arc<Window>,
+}
+
+struct Surface {
+    presenter: Box<dyn Presenter>,
+    size: Option<(u32, u32)>,
+}
+impl Surface {
+    fn resize(
+        &mut self,
+        buffer: &mut WindowBuffer,
+        width: u32,
+        height: u32,
+    ) -> Result<(), PresentError> {
+        if self.size != Some((width, height)) {
+            // Failed resizes remain pending, even if the CPU buffer happens to
+            // already have the requested dimensions.
+            self.presenter.resize(width, height)?;
+            self.size = Some((width, height));
+        }
+        if (buffer.width, buffer.height) != (width, height) {
+            buffer.resize(width, height);
+        }
+        Ok(())
+    }
 }
 
 impl Slot {
@@ -488,9 +528,7 @@ impl Slot {
         Slot {
             app,
             config,
-            window: None,
-            winit_id: None,
-            presenter: None,
+            native: NativeState::Pending,
             presenter_factory,
             buffer: WindowBuffer::new(1, 1),
             scale: Scale::ONE,
@@ -503,15 +541,11 @@ impl Slot {
             native_focused: true,
             next_tick: None,
             cursor_shape: CursorShape::Default,
-            #[cfg(feature = "accessibility")]
-            accessibility: None,
-            #[cfg(feature = "accessibility")]
-            tree_published: false,
         }
     }
 
     fn request_redraw(&self) {
-        if let Some(window) = &self.window {
+        if let Some(window) = self.native.window() {
             window.request_redraw();
         }
     }
@@ -526,6 +560,17 @@ impl Slot {
         if self.input_at.is_none() {
             self.input_at = Some(Instant::now());
         }
+    }
+
+    fn suspend(&mut self) {
+        self.cancel_touches();
+        self.native_focused = false;
+        self.modifiers = Modifiers::default();
+        self.next_tick = None;
+        self.input_at = None;
+        self.app.on_modifiers(self.modifiers);
+        self.app.on_ime(&ImeEvent::Disabled);
+        self.app.on_focus_changed(false);
     }
 
     fn cancel_touches(&mut self) {
@@ -578,20 +623,20 @@ impl Slot {
     }
 
     fn redraw(&mut self) {
-        let Some(window) = &self.window else { return };
-        let Some(presenter) = &mut self.presenter else {
+        let NativeState::Ready(native) = &mut self.native else {
             return;
         };
+        let window = &native.window;
         let size = window.inner_size();
         if size.width == 0 || size.height == 0 {
             return;
         }
-        if self.buffer.width != size.width || self.buffer.height != size.height {
-            self.buffer.resize(size.width, size.height);
-            if let Err(error) = presenter.resize(size.width, size.height) {
-                self.app.on_host_error(&error.to_string());
-                return;
-            }
+        if let Err(error) = native
+            .surface
+            .resize(&mut self.buffer, size.width, size.height)
+        {
+            self.app.on_host_error(&error.to_string());
+            return;
         }
         let started = Instant::now();
         self.app.render(&mut self.buffer, self.scale);
@@ -601,7 +646,7 @@ impl Slot {
         } else {
             window.set_ime_allowed(false);
         }
-        if let Err(error) = presenter.present(&self.buffer) {
+        if let Err(error) = native.surface.presenter.present(&self.buffer) {
             self.app.on_host_error(&error.to_string());
             return;
         }
@@ -629,12 +674,13 @@ impl Slot {
     /// and the application has a tree to give.
     #[cfg(feature = "accessibility")]
     fn publish_accessibility(&mut self) {
-        if !self.tree_published {
-            return;
-        }
-        let Some(adapter) = &mut self.accessibility else {
+        let NativeState::Ready(native) = &mut self.native else {
             return;
         };
+        if !native.tree_published {
+            return;
+        }
+        let adapter = &mut native.accessibility;
         let app = &mut self.app;
         let mut tree = None;
         adapter.update_if_active(|| {
@@ -652,7 +698,14 @@ impl Slot {
     fn publish_accessibility(&mut self) {}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HostLifecycle {
+    Suspended,
+    Active,
+}
+
 struct Shell {
+    lifecycle: HostLifecycle,
     slots: Vec<Slot>,
     /// The presenter factory shared by every window in a multi-window run.
     /// Taken per window but never consumed, so windows opened later —
@@ -668,10 +721,10 @@ struct Shell {
 
 impl Shell {
     /// Create the winit window for a slot that has none: the initial slots
-    /// in `resumed`, runtime requests on the next pass, everything again
-    /// after a suspend.
+    /// in `resumed`, and runtime requests on the next active pass. Desktop
+    /// resources survive suspension; rendering and input pause until resume.
     fn ensure_window(&mut self, event_loop: &ActiveEventLoop, index: usize) {
-        if self.slots[index].window.is_some() {
+        if matches!(self.slots[index].native, NativeState::Ready(_)) {
             return;
         }
         let slot = &mut self.slots[index];
@@ -720,14 +773,13 @@ impl Shell {
         };
         slot.app.on_native_window(&window);
         #[cfg(feature = "accessibility")]
-        {
-            slot.accessibility = Some(accesskit_winit::Adapter::with_event_loop_proxy(
-                event_loop,
-                &window,
-                self.proxy.clone(),
-            ));
-            window.set_visible(true);
-        }
+        let accessibility = accesskit_winit::Adapter::with_event_loop_proxy(
+            event_loop,
+            &window,
+            self.proxy.clone(),
+        );
+        #[cfg(feature = "accessibility")]
+        window.set_visible(true);
         if slot.app.ime_allowed() {
             apply_ime(&window, slot.app.ime_cursor_area());
         } else {
@@ -755,9 +807,17 @@ impl Shell {
         if let Some(theme) = window.theme() {
             slot.app.on_theme(theme == WinitTheme::Dark);
         }
-        slot.winit_id = Some(window.id());
-        slot.window = Some(window);
-        slot.presenter = Some(presenter);
+        slot.native = NativeState::Ready(NativeResources {
+            surface: Surface {
+                presenter,
+                size: None,
+            },
+            #[cfg(feature = "accessibility")]
+            accessibility,
+            #[cfg(feature = "accessibility")]
+            tree_published: false,
+            window,
+        });
     }
 }
 
@@ -766,7 +826,7 @@ impl Shell {
 fn find_slot(slots: &[Slot], id: WinitWindowId) -> Option<usize> {
     slots
         .iter()
-        .position(|slot| slot.winit_id.as_ref() == Some(&id))
+        .position(|slot| slot.native.window().is_some_and(|window| window.id() == id))
 }
 
 /// Queue a freshly requested window. It gets its winit window on the next
@@ -1085,14 +1145,20 @@ fn translate_button(button: WinitButton) -> Option<MouseButton> {
 
 impl ApplicationHandler<Host> for Shell {
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        self.lifecycle = HostLifecycle::Suspended;
         for slot in &mut self.slots {
-            slot.cancel_touches();
+            slot.suspend();
         }
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.lifecycle = HostLifecycle::Active;
         for index in 0..self.slots.len() {
             self.ensure_window(event_loop, index);
+            let slot = &mut self.slots[index];
+            slot.native_focused = slot.native.window().is_some_and(Window::has_focus);
+            slot.app.on_focus_changed(slot.native_focused);
+            slot.request_redraw();
         }
     }
 
@@ -1120,9 +1186,9 @@ impl ApplicationHandler<Host> for Shell {
                     Access::InitialTreeRequested => {
                         let slot = &mut self.slots[index];
                         if let Some(tree) = slot.app.accessibility_tree() {
-                            slot.tree_published = true;
-                            if let Some(adapter) = &mut slot.accessibility {
-                                adapter.update_if_active(|| tree);
+                            if let NativeState::Ready(native) = &mut slot.native {
+                                native.tree_published = true;
+                                native.accessibility.update_if_active(|| tree);
                             }
                         }
                         slot.request_redraw();
@@ -1134,7 +1200,9 @@ impl ApplicationHandler<Host> for Shell {
                     }
                     Access::AccessibilityDeactivated => {
                         let slot = &mut self.slots[index];
-                        slot.tree_published = false;
+                        if let NativeState::Ready(native) = &mut slot.native {
+                            native.tree_published = false;
+                        }
                         slot.app.on_accessibility_deactivated();
                     }
                 }
@@ -1160,8 +1228,8 @@ impl ApplicationHandler<Host> for Shell {
         #[cfg(feature = "accessibility")]
         {
             let slot = &mut self.slots[index];
-            if let (Some(adapter), Some(window)) = (&mut slot.accessibility, &slot.window) {
-                adapter.process_event(window, &event);
+            if let NativeState::Ready(native) = &mut slot.native {
+                native.accessibility.process_event(&native.window, &event);
             }
         }
         if matches!(event, WindowEvent::CloseRequested) {
@@ -1171,6 +1239,9 @@ impl ApplicationHandler<Host> for Shell {
             if self.slots.is_empty() && self.incoming.is_none() {
                 event_loop.exit();
             }
+            return;
+        }
+        if self.lifecycle == HostLifecycle::Suspended {
             return;
         }
         let slot = &mut self.slots[index];
@@ -1284,6 +1355,10 @@ impl ApplicationHandler<Host> for Shell {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.lifecycle == HostLifecycle::Suspended {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
         if let Some(incoming) = &mut self.incoming {
             for (config, mut app) in incoming() {
                 app.attach(self.waker.clone());
@@ -1301,12 +1376,8 @@ impl ApplicationHandler<Host> for Shell {
             slot.run_tick();
         }
         for slot in &mut self.slots {
-            drain_title(&mut *slot.app, slot.window.as_deref());
-            drain_window_state(
-                &mut *slot.app,
-                slot.window.as_deref(),
-                &mut slot.cursor_shape,
-            );
+            drain_title(&mut *slot.app, slot.native.window());
+            drain_window_state(&mut *slot.app, slot.native.window(), &mut slot.cursor_shape);
         }
         if self.slots.iter().any(|slot| slot.app.should_exit()) {
             event_loop.exit();
@@ -1406,6 +1477,7 @@ fn run_inner(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::<Host>::with_user_event().build()?;
     let mut shell = Shell {
+        lifecycle: HostLifecycle::Suspended,
         slots,
         shared_presenter,
         incoming: None,
@@ -1440,6 +1512,7 @@ pub fn run_window_service(
     let event_loop = EventLoop::<Host>::with_user_event().build()?;
     let waker = Waker::winit(event_loop.create_proxy());
     let mut shell = Shell {
+        lifecycle: HostLifecycle::Suspended,
         slots: Vec::new(),
         shared_presenter: None,
         incoming: Some(Box::new(incoming)),
@@ -1480,6 +1553,70 @@ mod tests {
     use std::collections::VecDeque;
     use std::rc::Rc;
     use winit::keyboard::SmolStr;
+
+    #[test]
+    fn failed_surface_resize_is_retried_at_the_same_dimensions() {
+        struct FlakyPresenter(Rc<Cell<usize>>);
+        impl Presenter for FlakyPresenter {
+            fn resize(&mut self, _: u32, _: u32) -> Result<(), PresentError> {
+                let calls = self.0.get() + 1;
+                self.0.set(calls);
+                if calls == 1 {
+                    Err(PresentError::Backend("transient".into()))
+                } else {
+                    Ok(())
+                }
+            }
+            fn present(&mut self, _: &WindowBuffer) -> Result<(), PresentError> {
+                Ok(())
+            }
+            fn backend(&self) -> liminalkit_shell::PresenterBackend {
+                liminalkit_shell::PresenterBackend::Software
+            }
+        }
+        let calls = Rc::new(Cell::new(0));
+        let mut surface = Surface {
+            presenter: Box::new(FlakyPresenter(calls.clone())),
+            size: None,
+        };
+        // Buffer dimensions alone are not evidence that the native resize succeeded.
+        let mut buffer = WindowBuffer::new(200, 100);
+        assert!(surface.resize(&mut buffer, 200, 100).is_err());
+        assert_eq!(surface.size, None);
+        surface.resize(&mut buffer, 200, 100).unwrap();
+        surface.resize(&mut buffer, 200, 100).unwrap();
+        assert_eq!(calls.get(), 2);
+        assert_eq!(surface.size, Some((200, 100)));
+    }
+
+    #[test]
+    fn suspension_retires_focus_modifiers_and_pending_interaction() {
+        struct App(Rc<RefCell<Vec<&'static str>>>);
+        impl PixelApp for App {
+            fn render(&mut self, _: &mut WindowBuffer, _: Scale) {}
+            fn on_modifiers(&mut self, modifiers: Modifiers) {
+                assert!(modifiers.none());
+                self.0.borrow_mut().push("modifiers");
+            }
+            fn on_ime(&mut self, ime: &ImeEvent) {
+                assert!(matches!(ime, ImeEvent::Disabled));
+                self.0.borrow_mut().push("ime");
+            }
+            fn on_focus_changed(&mut self, focused: bool) {
+                assert!(!focused);
+                self.0.borrow_mut().push("focus");
+            }
+        }
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut slot = slot(Box::new(App(events.clone())));
+        slot.modifiers.shift = true;
+        slot.next_tick = Some(Instant::now());
+        slot.input_at = Some(Instant::now());
+        slot.suspend();
+        assert!(!slot.native_focused);
+        assert!(slot.next_tick.is_none() && slot.input_at.is_none());
+        assert_eq!(*events.borrow(), ["modifiers", "ime", "focus"]);
+    }
 
     #[test]
     fn escape_reaches_the_application_rather_than_closing_the_window() {
@@ -1905,7 +2042,7 @@ mod tests {
         assert!(drain_requests(&mut slots), "slots remain");
         assert_eq!(slots.len(), 2);
         assert!(
-            slots[1].window.is_none(),
+            matches!(slots[1].native, NativeState::Pending),
             "the window is created on the next pass, not in the drain"
         );
         assert_eq!(slots[1].config.title, "second");

@@ -165,6 +165,10 @@ impl Input {
         self.invalidate_interaction();
         self.focus_point = Some((x, y));
     }
+    /// A modal input owner consumed the current accessibility focus request.
+    pub fn clear_focus_request(&mut self) {
+        self.focus_point = None;
+    }
     pub fn focus_requested(&self, area: liminalkit_raster::Rect) -> bool {
         self.focus_point.is_some_and(|(x, y)| area.contains(x, y))
     }

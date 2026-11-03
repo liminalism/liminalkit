@@ -67,7 +67,7 @@ struct Slot {
     /// The contact in the slot, if one is down.
     tracking: Option<i32>,
     /// The contact the application has been told about, if any.
-    reported: Option<i32>,
+    reported: Option<TouchEvent>,
     x: i32,
     y: i32,
     pressure: Option<i32>,
@@ -78,12 +78,18 @@ struct Slot {
 /// a hostile or broken device from growing this without bound.
 const MAX_SLOTS: usize = 32;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyncState {
+    Receiving,
+    DiscardingUntilReport,
+}
+
 pub struct MtDecoder {
     device: u64,
     mapping: TouchMapping,
     slots: Vec<Slot>,
-    current: usize,
-    dropped: bool,
+    current: Option<usize>,
+    sync: SyncState,
 }
 
 impl MtDecoder {
@@ -92,8 +98,8 @@ impl MtDecoder {
             device,
             mapping,
             slots: vec![Slot::default(); 10],
-            current: 0,
-            dropped: false,
+            current: Some(0),
+            sync: SyncState::Receiving,
         }
     }
 
@@ -108,39 +114,42 @@ impl MtDecoder {
         out: &mut Vec<TouchEvent>,
     ) {
         match (kind, code) {
-            (EV_SYN, SYN_DROPPED) => self.dropped = true,
-            (EV_SYN, SYN_REPORT) if self.dropped => {
-                self.dropped = false;
+            (EV_SYN, SYN_DROPPED) => self.sync = SyncState::DiscardingUntilReport,
+            (EV_SYN, SYN_REPORT) if self.sync == SyncState::DiscardingUntilReport => {
+                self.sync = SyncState::Receiving;
                 self.cancel_all(at, out);
             }
             (EV_SYN, SYN_REPORT) => self.report(at, out),
-            _ if self.dropped => {}
+            _ if self.sync == SyncState::DiscardingUntilReport => {}
             (EV_ABS, ABS_MT_SLOT) => {
-                if let Ok(slot) = usize::try_from(value) {
-                    if slot < MAX_SLOTS {
-                        if slot >= self.slots.len() {
-                            self.slots.resize(slot + 1, Slot::default());
-                        }
-                        self.current = slot;
+                self.current = usize::try_from(value).ok().filter(|slot| *slot < MAX_SLOTS);
+                if let Some(slot) = self.current {
+                    if slot >= self.slots.len() {
+                        self.slots.resize(slot + 1, Slot::default());
                     }
                 }
             }
+            // An invalid selection discards the entire slot's updates, rather
+            // than redirecting them into the previously selected contact.
+            _ if self.current.is_none() => {}
             (EV_ABS, ABS_MT_TRACKING_ID) => {
-                let slot = &mut self.slots[self.current];
+                let slot = &mut self.slots[self.current.expect("valid slot selection")];
                 slot.tracking = (value >= 0).then_some(value);
                 slot.moved = true;
             }
             (EV_ABS, ABS_MT_POSITION_X) => {
-                let slot = &mut self.slots[self.current];
+                let slot = &mut self.slots[self.current.expect("valid slot selection")];
                 slot.x = value;
                 slot.moved = true;
             }
             (EV_ABS, ABS_MT_POSITION_Y) => {
-                let slot = &mut self.slots[self.current];
+                let slot = &mut self.slots[self.current.expect("valid slot selection")];
                 slot.y = value;
                 slot.moved = true;
             }
-            (EV_ABS, ABS_MT_PRESSURE) => self.slots[self.current].pressure = Some(value),
+            (EV_ABS, ABS_MT_PRESSURE) => {
+                self.slots[self.current.expect("valid slot selection")].pressure = Some(value)
+            }
             _ => {}
         }
     }
@@ -199,14 +208,30 @@ impl MtDecoder {
             let position = self.position(&slot);
             // A contact that ended, or was replaced by a new one in the same
             // report (a lift and a press faster than one report).
-            if let Some(old) = slot.reported.filter(|&old| slot.tracking != Some(old)) {
-                let phase = if position.is_some() {
+            if let Some(mut old) = slot
+                .reported
+                .filter(|old| slot.tracking.map(|id| id as u64) != Some(old.id.contact))
+            {
+                // Replacement coordinates belong to the new identity. A normal
+                // lift may include a final coordinate for the existing one.
+                if slot.tracking.is_none() {
+                    if let Some(position) = position {
+                        old = self.event(
+                            &slot,
+                            old.id.contact as i32,
+                            TouchPhase::Ended,
+                            position,
+                            at,
+                        );
+                    }
+                }
+                old.phase = if position.is_some() {
                     TouchPhase::Ended
                 } else {
                     TouchPhase::Cancelled
                 };
-                let last = position.unwrap_or((0.0, 0.0));
-                out.push(self.event(&slot, old, phase, last, at));
+                old.received_at = at;
+                out.push(old);
                 self.slots[index].reported = None;
             }
             let Some(contact) = slot.tracking else {
@@ -217,13 +242,17 @@ impl MtDecoder {
             let Some(position) = position else {
                 continue;
             };
-            let phase = if self.slots[index].reported == Some(contact) {
+            let phase = if self.slots[index]
+                .reported
+                .is_some_and(|old| old.id.contact == contact as u64)
+            {
                 TouchPhase::Moved
             } else {
-                self.slots[index].reported = Some(contact);
                 TouchPhase::Started
             };
-            out.push(self.event(&slot, contact, phase, position, at));
+            let event = self.event(&slot, contact, phase, position, at);
+            self.slots[index].reported = Some(event);
+            out.push(event);
         }
     }
 
@@ -232,9 +261,10 @@ impl MtDecoder {
     pub fn cancel_all(&mut self, at: Instant, out: &mut Vec<TouchEvent>) {
         for index in 0..self.slots.len() {
             let slot = self.slots[index];
-            if let Some(contact) = slot.reported {
-                let position = self.position(&slot).unwrap_or((0.0, 0.0));
-                out.push(self.event(&slot, contact, TouchPhase::Cancelled, position, at));
+            if let Some(mut event) = slot.reported {
+                event.phase = TouchPhase::Cancelled;
+                event.received_at = at;
+                out.push(event);
             }
             self.slots[index] = Slot::default();
         }
@@ -334,7 +364,30 @@ mod tests {
         let events = f.syn(SYN_REPORT);
         assert_eq!(events[0].0, 1);
         assert_eq!(events[0].1, TouchPhase::Ended);
+        assert_eq!(
+            events[0].2,
+            (10.5, 10.5),
+            "old identity keeps its own position"
+        );
         assert_eq!((events[1].0, events[1].1), (2, TouchPhase::Started));
+        assert_eq!(events[1].2, (30.5, 10.5));
+    }
+
+    #[test]
+    fn invalid_slot_updates_are_discarded_until_a_valid_selection() {
+        let mut f = Feed::new(Rotation::R0);
+        f.down(0, 1, 10, 10);
+        f.syn(SYN_REPORT);
+        for invalid in [-1, MAX_SLOTS as i32, 999] {
+            f.abs(ABS_MT_SLOT, invalid);
+            f.abs(ABS_MT_TRACKING_ID, -1);
+            f.abs(ABS_MT_POSITION_X, 900);
+            f.abs(ABS_MT_PRESSURE, 100);
+            assert!(f.syn(SYN_REPORT).is_empty());
+        }
+        f.abs(ABS_MT_SLOT, 0);
+        f.abs(ABS_MT_POSITION_Y, 20);
+        assert_eq!(f.syn(SYN_REPORT), [(1, TouchPhase::Moved, (10.5, 20.5))]);
     }
 
     #[test]
@@ -377,6 +430,7 @@ mod tests {
         for (code, value) in [
             (ABS_MT_SLOT, 999),
             (ABS_MT_SLOT, -3),
+            (ABS_MT_SLOT, 0),
             (ABS_MT_TRACKING_ID, 5),
             (ABS_MT_POSITION_X, 4095),
             (ABS_MT_POSITION_Y, 2048),

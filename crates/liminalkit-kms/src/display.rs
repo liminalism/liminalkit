@@ -249,8 +249,9 @@ impl Display {
         if flipped && self.flip_pending {
             self.front = 1 - self.front;
             self.flip_pending = false;
+            return Ok(true);
         }
-        Ok(flipped)
+        Ok(false)
     }
 }
 

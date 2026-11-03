@@ -70,6 +70,8 @@ pub enum Gesture {
     DragEnded {
         velocity: (f64, f64),
     },
+    /// A second contact superseded single-contact recognition; capture continues.
+    TransformStarted,
     Transform(TouchDelta),
     /// Retire pressed feedback and tap candidates; never fling on cancellation.
     Cancelled,
@@ -150,115 +152,153 @@ impl VelocityTracker {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SingleMode {
+    TapEligible,
+    DragOnly,
+    Dragging,
+}
+
+#[derive(Debug, Clone)]
+struct SingleContact {
+    id: TouchId,
+    origin: (f64, f64),
+    last: (f64, f64),
+    started: Instant,
+    last_time: Instant,
+    mode: SingleMode,
+    velocity: VelocityTracker,
+}
+impl SingleContact {
+    fn new(event: TouchEvent, mode: SingleMode, config: GestureConfig) -> Self {
+        let mut velocity = VelocityTracker::default();
+        velocity.add(event.received_at, event.position, config.velocity_window);
+        Self {
+            id: event.id,
+            origin: event.position,
+            last: event.position,
+            started: event.received_at,
+            last_time: event.received_at,
+            mode,
+            velocity,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Recognition {
+    Idle,
+    Single(SingleContact),
+    Transform { device: u64, last_time: Instant },
+}
+impl Recognition {
+    fn session(&self) -> Option<(u64, Instant)> {
+        match self {
+            Self::Idle => None,
+            Self::Single(single) => Some((single.id.device, single.last_time)),
+            Self::Transform { device, last_time } => Some((*device, *last_time)),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GestureRecognizer {
     config: GestureConfig,
     contacts: TouchState,
-    primary: Option<TouchId>,
-    origin: (f64, f64),
-    last: (f64, f64),
-    started: Option<Instant>,
-    last_time: Option<Instant>,
-    dragging: bool,
-    tap: bool,
-    velocity: VelocityTracker,
+    recognition: Recognition,
 }
 impl GestureRecognizer {
     pub fn new(config: GestureConfig) -> Result<Self, &'static str> {
         Ok(Self {
             config: config.validate()?,
             contacts: TouchState::default(),
-            primary: None,
-            origin: (0.0, 0.0),
-            last: (0.0, 0.0),
-            started: None,
-            last_time: None,
-            dragging: false,
-            tap: false,
-            velocity: VelocityTracker::default(),
+            recognition: Recognition::Idle,
         })
     }
     pub fn config(&self) -> GestureConfig {
         self.config
     }
     pub fn active(&self) -> bool {
-        !self.contacts.contacts().is_empty()
+        !matches!(self.recognition, Recognition::Idle)
     }
     /// Call when a press catches a moving scroll: it must not also activate.
     pub fn suppress_tap(&mut self) {
-        self.tap = false;
+        if let Recognition::Single(single) = &mut self.recognition {
+            if single.mode == SingleMode::TapEligible {
+                single.mode = SingleMode::DragOnly;
+            }
+        }
     }
     /// Cancel before replacing this recognizer or changing its coordinate scale.
     pub fn cancel(&mut self) -> Vec<Gesture> {
         let active = self.active();
         self.contacts = TouchState::default();
-        self.primary = None;
-        self.dragging = false;
-        self.tap = false;
-        self.velocity.clear();
-        self.last_time = None;
+        self.recognition = Recognition::Idle;
         if active {
             vec![Gesture::Cancelled, Gesture::Released]
         } else {
             Vec::new()
         }
     }
-    fn constrained(&self, p: (f64, f64)) -> (f64, f64) {
-        match self.config.axis {
+    fn constrained(config: GestureConfig, p: (f64, f64)) -> (f64, f64) {
+        match config.axis {
             DragAxis::Free => p,
             DragAxis::Horizontal => (p.0, 0.0),
             DragAxis::Vertical => (0.0, p.1),
         }
     }
-    fn movement(&mut self, event: TouchEvent, out: &mut Vec<Gesture>) {
+    fn movement(
+        config: GestureConfig,
+        single: &mut SingleContact,
+        event: TouchEvent,
+        out: &mut Vec<Gesture>,
+    ) {
         let total = (
-            event.position.0 - self.origin.0,
-            event.position.1 - self.origin.1,
+            event.position.0 - single.origin.0,
+            event.position.1 - single.origin.1,
         );
-        if total.0.hypot(total.1) > self.config.slop {
-            self.tap = false;
+        if single.mode == SingleMode::TapEligible && total.0.hypot(total.1) > config.slop {
+            single.mode = SingleMode::DragOnly;
         }
-        let allowed = self.constrained(total);
-        if !self.dragging && allowed.0.hypot(allowed.1) > self.config.slop {
-            self.dragging = true;
-            self.tap = false;
+        let allowed = Self::constrained(config, total);
+        if single.mode != SingleMode::Dragging && allowed.0.hypot(allowed.1) > config.slop {
+            single.mode = SingleMode::Dragging;
             out.push(Gesture::DragStarted);
             // Consume the threshold without a jump at recognition.
-            self.last = event.position;
+            single.last = event.position;
         }
-        if self.dragging {
-            let delta = self.constrained((
-                event.position.0 - self.last.0,
-                event.position.1 - self.last.1,
-            ));
+        if single.mode == SingleMode::Dragging {
+            let delta = Self::constrained(
+                config,
+                (
+                    event.position.0 - single.last.0,
+                    event.position.1 - single.last.1,
+                ),
+            );
             if delta != (0.0, 0.0) {
                 out.push(Gesture::Drag { delta });
             }
         }
-        self.last = event.position;
-        self.velocity.add(
-            event.received_at,
-            event.position,
-            self.config.velocity_window,
-        );
+        single.last = event.position;
+        single.last_time = event.received_at;
+        single
+            .velocity
+            .add(event.received_at, event.position, config.velocity_window);
     }
     pub fn update(&mut self, event: TouchEvent) -> Vec<Gesture> {
         let mut out = Vec::new();
         let known = self.contacts.contacts().iter().any(|c| c.id == event.id);
-        if self.primary.is_some_and(|id| id.device != event.id.device) {
+        let session = self.recognition.session();
+        if session.is_some_and(|(device, _)| device != event.id.device) {
             return out;
         }
         if event.phase == TouchPhase::Cancelled && known {
             return self.cancel();
         }
-        if !event.position.0.is_finite() || !event.position.1.is_finite() {
-            return if known && event.phase == TouchPhase::Ended {
-                self.cancel()
-            } else {
-                out
-            };
-        }
-        if self.last_time.is_some_and(|t| event.received_at < t) {
+        if !event.position.0.is_finite()
+            || !event.position.1.is_finite()
+            || session.is_some_and(|(_, time)| event.received_at < time)
+        {
             return if known && event.phase == TouchPhase::Ended {
                 self.cancel()
             } else {
@@ -270,84 +310,90 @@ impl GestureRecognizer {
         {
             return out;
         }
-        self.last_time = Some(event.received_at);
         let before = self.contacts.contacts().len();
         match event.phase {
             TouchPhase::Started => {
                 self.contacts.update(event);
                 if before == 0 {
-                    self.primary = Some(event.id);
-                    self.origin = event.position;
-                    self.last = event.position;
-                    self.started = Some(event.received_at);
-                    self.dragging = false;
-                    self.tap = true;
-                    self.velocity.clear();
-                    self.velocity.add(
-                        event.received_at,
-                        event.position,
-                        self.config.velocity_window,
-                    );
+                    self.recognition = Recognition::Single(SingleContact::new(
+                        event,
+                        SingleMode::TapEligible,
+                        self.config,
+                    ));
                     out.push(Gesture::Pressed {
                         position: event.position,
                     });
                 } else {
-                    self.tap = false;
-                    self.dragging = false;
-                    self.velocity.clear();
-                    out.push(Gesture::Cancelled);
-                }
-            }
-            TouchPhase::Moved if before > 1 => {
-                if let Some(delta) = self.contacts.update(event) {
-                    out.push(Gesture::Transform(delta));
+                    if matches!(self.recognition, Recognition::Single(_)) {
+                        out.push(Gesture::TransformStarted);
+                    }
+                    self.recognition = Recognition::Transform {
+                        device: event.id.device,
+                        last_time: event.received_at,
+                    };
                 }
             }
             TouchPhase::Moved => {
-                self.contacts.update(event);
-                self.movement(event, &mut out);
+                let delta = self.contacts.update(event);
+                match &mut self.recognition {
+                    Recognition::Single(single) => {
+                        Self::movement(self.config, single, event, &mut out)
+                    }
+                    Recognition::Transform { last_time, .. } => {
+                        *last_time = event.received_at;
+                        if let Some(delta) = delta {
+                            out.push(Gesture::Transform(delta));
+                        }
+                    }
+                    Recognition::Idle => unreachable!("known contact has a recognition session"),
+                }
             }
             TouchPhase::Ended => {
-                if before == 1 {
-                    // Include a final changed coordinate, but do not manufacture a
-                    // fresh velocity sample for a stationary release after a pause.
-                    if event.position != self.last {
-                        self.movement(event, &mut out);
+                if let Recognition::Single(single) = &mut self.recognition {
+                    // Stationary release must not manufacture a fresh velocity sample.
+                    if event.position != single.last {
+                        Self::movement(self.config, single, event, &mut out);
                     }
-                    if self.dragging {
-                        out.push(Gesture::DragEnded {
-                            velocity: self.constrained(
-                                self.velocity.estimate(event.received_at, self.config),
+                    match single.mode {
+                        SingleMode::Dragging => out.push(Gesture::DragEnded {
+                            velocity: Self::constrained(
+                                self.config,
+                                single.velocity.estimate(event.received_at, self.config),
                             ),
-                        });
-                    } else if self.tap
-                        && self.started.is_some_and(|t| {
-                            event.received_at.duration_since(t) <= self.config.tap_timeout
-                        })
-                    {
-                        out.push(Gesture::Tap {
-                            position: event.position,
-                        });
+                        }),
+                        SingleMode::TapEligible
+                            if event.received_at.duration_since(single.started)
+                                <= self.config.tap_timeout =>
+                        {
+                            out.push(Gesture::Tap {
+                                position: event.position,
+                            });
+                        }
+                        _ => {}
                     }
                 }
                 self.contacts.update(event);
-                self.tap = false;
-                self.velocity.clear();
-                self.dragging = false;
-                if let Some(remaining) = self.contacts.contacts().first() {
-                    self.primary = Some(remaining.id);
-                    self.origin = remaining.position;
-                    self.last = remaining.position;
-                    self.velocity.add(
-                        event.received_at,
-                        remaining.position,
-                        self.config.velocity_window,
-                    );
-                } else {
-                    self.primary = None;
-                    self.last_time = None;
-                    out.push(Gesture::Released);
-                }
+                self.recognition = match self.contacts.contacts() {
+                    [] => {
+                        out.push(Gesture::Released);
+                        Recognition::Idle
+                    }
+                    [remaining] => {
+                        let rebased = TouchEvent {
+                            received_at: event.received_at,
+                            ..*remaining
+                        };
+                        Recognition::Single(SingleContact::new(
+                            rebased,
+                            SingleMode::DragOnly,
+                            self.config,
+                        ))
+                    }
+                    _ => Recognition::Transform {
+                        device: event.id.device,
+                        last_time: event.received_at,
+                    },
+                };
             }
             TouchPhase::Cancelled => {}
         }
