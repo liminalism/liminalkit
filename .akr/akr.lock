@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:42b159ee17161189063325d6cd8edac90cb17caa7610137ea8e70d112edd1e3e"
+    source_graph "sha256:491cf6a3c608ffd17621c8fc341cb42cd24d669ce29b0029685f1cf83a50e4c5"
 }
 
 source ".akr/project.akr" {
@@ -14,13 +14,13 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/decisions.akr" {
-    hash "sha256:95a89b6118f839be761f8812c938327a27a8234768b4b62718d077a3f2f37986"
-    records 3
+    hash "sha256:169457a6fa3ddf998ce7acbb495f3d56aa19ca7b60ab8dccc091f4f354b1c34f"
+    records 4
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:0a2a960f49528176d029473d004a6a7a9c52838ef14590595ed7754bb274eb8d"
-    records 17
+    hash "sha256:c1b54d83b8fcfb796d1113bc4b4f4f05660f81e55901341880ea973ccf189645"
+    records 19
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
@@ -39,8 +39,20 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:79236f531afbc426a24f17e2eb1e060913f73e080e8d93e4867ad88e1bd4cbf8"
+    hash "sha256:7dc91c9c848ea043e133790ffd5f63e1647abde804adb0fcc7810d987120d43a"
     records 13
+}
+
+resolution @pixelkit.decision.bidi-behind-feature/1 {
+    slot derived_from
+    to @pixelkit.work.text-shaping-fallback/1
+    hash "sha256:1d2d411ce1ae337db71dea7a0ba7ab8908317e9a8597989145a7402cbe2c6bb8"
+}
+
+resolution @pixelkit.decision.bidi-behind-feature/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
 }
 
 resolution @pixelkit.decision.device-pixel-rects/1 {
@@ -64,7 +76,7 @@ resolution @pixelkit.decision.popups-claim-input-first/1 {
 resolution @pixelkit.question.publish-readiness/1 {
     slot blocks
     to @pixelkit.work.publish-packaging/1
-    hash "sha256:48becae919c94f4c5838c6cc31432c459b3cd89c332d1b1c82cfc74b7a82a18a"
+    hash "sha256:9ba6ca6d67f60b8ec66344906f245abad8aef4576b7e66fa7f2f23cd898c8f78"
 }
 
 resolution @pixelkit.work.accessibility-validation/1 {
@@ -130,7 +142,7 @@ resolution @pixelkit.work.publish-packaging/1 {
 resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.public-docs/1
-    hash "sha256:71c6fb01f77bb82f5625f4c6a369d6c0fd946948b7dcef2d4434addf3904000e"
+    hash "sha256:24b7aa5ba05a6db16faad5243a1a827e87e6d1a637ce6b558dc8839704cfb25b"
 }
 
 resolution @pixelkit.work.text-shaping-fallback/1 {
@@ -167,6 +179,11 @@ seal @pixelkit.evidence.adoptability-pass-tests/1 {
     hash "sha256:103faaea9aab876a0eff2d36dc513566e5ed6e13e2cf9b8913d68f967fa7c6c2"
 }
 
+seal @pixelkit.evidence.bidi-feature-tests/1 {
+    state verified
+    hash "sha256:1cfcd195461b8b90d2dd6fef9f4633ed138291918a8f27b60bfa3d5fea18c359"
+}
+
 seal @pixelkit.evidence.capabilities-pass-tests/1 {
     state verified
     hash "sha256:d2b650053803b068c50b3fc617fceb59507b3558c6411faab364fdfa051fefed"
@@ -180,6 +197,11 @@ seal @pixelkit.evidence.coverage-simd-profile/1 {
 seal @pixelkit.evidence.coverage-simd-tests/1 {
     state verified
     hash "sha256:112faae8aa88726b45a4afce0614748814c36037be2fd12e2c033d5a9523b9c8"
+}
+
+seal @pixelkit.evidence.crate-package-contents/1 {
+    state verified
+    hash "sha256:3ad04548d7cae62e5efa2899ad5d84ba0ff3d2ef17f821e3c37c334ebd7c5617"
 }
 
 seal @pixelkit.evidence.frame-bench-resolution-sweep/1 {

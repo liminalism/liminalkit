@@ -25,6 +25,19 @@ record pixelkit.evidence.adoptability-pass-tests/1 : evidence {
         """
 }
 
+record pixelkit.evidence.bidi-feature-tests/1 : evidence {
+    title "Text crate and workspace tests pass with and without the bidi feature; lints and docs clean"
+    state verified
+    result pass
+    method command
+    observed_at git:900358ac8a7157d11394af01f71fb52e3bda2628
+    command "cargo test -p liminalkit-text --features bidi && cargo test -p liminalkit-text && cargo test --workspace --features liminalkit/test-fonts,liminalkit/bidi && cargo test -p liminalkit -p liminalkit-ui --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit-ui/accessibility && cargo clippy --workspace --all-targets --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit/bidi -- -D warnings && RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --no-deps --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit/bidi && cargo fmt --all --check"
+    summary """
+        liminalkit-text: 83 tests pass with bidi on, 80 with it off (the three feature-gated tests cover a mixed line, mirrored brackets and marks on a reversed base); workspace with bidi on 549 passed, 0 failed; accessibility set 191 passed; clippy -D warnings, rustdoc -D warnings and fmt all clean.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.capabilities-pass-tests/1 : evidence {
     title "Workspace tests pass with the new popups, drag, text area and adapter extensions"
     state verified
@@ -60,6 +73,19 @@ record pixelkit.evidence.coverage-simd-tests/1 : evidence {
     summary """
         116 raster tests passed after the u8x32 merge and the 1024-byte dispatch threshold, including clipped spans and boundary lengths.
         """
+}
+
+record pixelkit.evidence.crate-package-contents/1 : evidence {
+    title "cargo package lists and leaf-crate verification for all seven crates"
+    state verified
+    result pass
+    method command
+    observed_at git:900358ac8a7157d11394af01f71fb52e3bda2628
+    command "for c in liminalkit-raster liminalkit-text liminalkit-shell liminalkit-ui liminalkit-windowing liminalkit-kms liminalkit; do cargo package --list -p $c --allow-dirty; done && cargo package -p liminalkit-raster --allow-dirty"
+    summary """
+        Every crate's package list holds only its sources, README, examples and manifest; liminalkit-text also ships the two Noto test fonts and their README (needed by `test-fonts`); liminalkit picks up the workspace README. liminalkit-raster packages to 26 files, 247 KiB (67.7 KiB compressed) and the packaged copy builds. Every manifest carries a description, keywords (at most five, each at most 20 characters) and categories. No publish or dry run was performed.
+        """
+    author "dk"
 }
 
 record pixelkit.evidence.frame-bench-resolution-sweep/1 : evidence {

@@ -1,6 +1,33 @@
 akr 0.1
 project pixelkit
 
+record pixelkit.decision.bidi-behind-feature/1 : decision {
+    title "Bidirectional text reordering lives behind an off-by-default `bidi` feature of liminalkit-text"
+    state proposed
+    scope [ path "crates/liminalkit-text/**" ]
+    topic text-direction
+    decision """
+        liminalkit-text resolves mixed-direction lines with the Unicode Bidirectional Algorithm only when its `bidi` feature is on. The feature adds `unicode-bidi` (levels and visual runs) and `unicode-bidi-mirroring` (bracket pairs), which depend on nothing else. `text::shape_face` then shapes each visual level run separately: right-to-left runs are reversed after substitution one base-plus-marks group at a time and positioned in visual order (`Face::shape_run`), with mirrored brackets, and runs are placed in display order. Clusters keep indexing the logical string so `fit`, `wrap` and the cache are unchanged. With the feature off, or for any line with no right-to-left level, the output is byte-for-byte the old left-to-right path. Independently of the feature, the Unicode direction format characters (U+061C, U+200E, U+200F, U+202A..U+202E, U+2066..U+2069) are never drawn.
+        """
+    context """
+        The outside review asked for bidirectional text. UAX #9 is too large to reimplement in a crate that advertises having no dependencies, and the crate's default build is for appliances that draw Latin and Thai. The feature boundary keeps the dependency-free default honest while letting a desktop application opt in with one line. The direction controls were drawn as .notdef boxes before, which was wrong for every font, so that fix is unconditional.
+        """
+    consequences """
+        Resolution is per shaped line, not per paragraph, because wrapping produces lines before shaping; neutrals at a line edge can resolve differently than a paragraph-level pass would. Controls measure and edit in logical order, so a text field containing right-to-left text draws reordered glyphs but places its caret at the logical prefix's width: fields are correct for left-to-right text only. Complex-script joining (Arabic initial, medial and final forms) is not provided: the layout module applies the lookups the bundled faces use and does not select lookups by script or feature tag, so that remains the external-shaper decision in @pixelkit.work.text-shaping-fallback.
+        """
+    derived_from [ @pixelkit.work.text-shaping-fallback ]
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            The request for bidirectional text and an optional mature shaper; the slice taken here is bidi only.
+            """
+    }
+}
+
 record pixelkit.decision.device-pixel-rects/1 : decision {
     title "Controls take device-pixel rectangles; Theme sizes are logical and scaled by the control"
     state proposed
