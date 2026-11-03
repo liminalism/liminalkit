@@ -35,6 +35,18 @@ record pixelkit.papercut.building-docs-with-rustdocflags-d-warnings/1 : papercut
     created_at 2026-11-03
 }
 
+record pixelkit.papercut.closing-a-papercut-through-knowledge-revise/1 : papercut {
+    title "Closing a papercut through knowledge.revise with slots.closed_at =…"
+    state verified
+    statement """
+        Closing a papercut through knowledge.revise with slots.closed_at = "2026-11-03" was rejected with AKR-T013 "expected a date, found \"2026-11-03\"" even though the schema advertises closed_at as date (YYYY-MM-DD); the MCP layer seems to pass the string where the parser wants a bare date literal. Left the papercut open.
+        """
+    observed_at git:2d8fbfd3a2dea14ca91a6867bc64a2d3b25ea1b7
+    about "akr"
+    author "claude"
+    created_at 2026-11-03
+}
+
 record pixelkit.papercut.creating-the-interaction-lifecycle-work-record/1 : papercut {
     title "Creating the interaction-lifecycle work record failed validation…"
     state verified

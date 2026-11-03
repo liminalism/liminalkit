@@ -60,3 +60,27 @@ record pixelkit.decision.facade-crate-and-app-adapter/1 : decision {
             """
     }
 }
+
+record pixelkit.decision.popups-claim-input-first/1 : decision {
+    title "Anything that floats claims its input before the background draws and is drawn last"
+    state proposed
+    scope [
+        path "crates/liminalkit-ui/src/dropdown.rs",
+        path "crates/liminalkit-ui/src/menu.rs",
+        path "crates/liminalkit-ui/src/overlay.rs",
+        path "crates/liminalkit-ui/src/tooltip.rs",
+        path "crates/liminalkit/src/app.rs"
+    ]
+    topic popups
+    decision """
+        Dropdown, Menu and Overlay share one contract. The screen owns the popup's state. At the start of the frame, before the Ui is built and before Focus::handle_tab reads the keys, the popup's handle_input takes the clicks, context clicks, scroll and keys that belong to it or that land outside it (Input::take_keys, restored later with Input::restore_keys, which does not start a new interaction epoch), so background controls never act through a popup. At the end of the frame its draw paints it above everything, hands the retained keys to its own controls, and reports what happened. Under App this split is Screen::before_frame and the tail of Screen::draw. A modal Overlay keeps its own Focus so Tab is trapped inside it; a popover is dismissed by an outside click that is swallowed rather than delivered.
+        """
+    context """
+        Immediate mode has no z-order. The dropdown already drew last and claimed first; adding menus, dialogs and popovers each with their own arrangement would have given screens three rules to remember.
+        """
+    consequences """
+        A popup that is drawn without a prior handle_input still works but is not modal for that frame: draw claims what is left. Overlay content registers its controls with the overlay's Focus explicitly (the _focused control variants); the background Focus may also see them register, harmlessly, because the keys it would act on were taken.
+        """
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}

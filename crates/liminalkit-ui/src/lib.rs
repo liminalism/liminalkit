@@ -5,19 +5,24 @@
 //! (restaurant-pos), see `ATTRIBUTION.md`.
 
 pub mod chrome;
+pub mod drag;
 pub mod dropdown;
 pub mod focus;
 pub mod form;
 pub mod layout;
 pub mod list;
+pub mod menu;
+pub mod overlay;
 pub mod palette;
 #[cfg(feature = "accessibility")]
 pub mod semantics;
+pub mod textarea;
 pub mod toast;
 pub mod tooltip;
 pub mod widget;
 
 pub use chrome::ButtonStyle;
+pub use drag::{Drag, DropOutcome, DRAG_THRESHOLD};
 pub use dropdown::Dropdown;
 pub use focus::{Focus, FocusKey};
 pub use form::{CHECKBOX_SIZE, RADIO_SIZE, TOGGLE_SIZE};
@@ -26,7 +31,10 @@ pub use layout::{
     place, stack_lengths, vstack, Anchor, Flow, Insets, Length,
 };
 pub use list::{ScrollList, ScrollState};
+pub use menu::Menu;
+pub use overlay::{Overlay, OverlayOutcome, Placement};
 pub use palette::{Appearance, OperationalPalette};
+pub use textarea::TextAreaState;
 pub use toast::{
     toast_layout, ToastAction, ToastCard, ToastLayout, ToastOutcome, TOAST_MAX_ACTIONS,
     TOAST_MAX_BODY_LINES, TOAST_WIDTH,

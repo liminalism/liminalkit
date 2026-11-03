@@ -704,6 +704,9 @@ enum HostLifecycle {
     Active,
 }
 
+/// A source of applications to open as new windows, polled on the main thread.
+type IncomingWindows = Box<dyn FnMut() -> Vec<(WindowConfig, Box<dyn PixelApp>)>>;
+
 struct Shell {
     lifecycle: HostLifecycle,
     slots: Vec<Slot>,
@@ -712,7 +715,7 @@ struct Shell {
     /// including ones requested at runtime — get the same presenter.
     shared_presenter: Option<MultiPresenterFactory>,
     /// A persistent service delivers new applications on the main thread.
-    incoming: Option<Box<dyn FnMut() -> Vec<(WindowConfig, Box<dyn PixelApp>)>>>,
+    incoming: Option<IncomingWindows>,
     waker: Waker,
     failure: Option<String>,
     #[cfg(feature = "accessibility")]

@@ -81,8 +81,9 @@ pub mod prelude {
     pub use crate::shell::{Input, KeyInput, Modifiers, MouseButton, Scale};
     pub use crate::text::{Align, Face, FaceId, FontSet, TextCache, TextStyle};
     pub use crate::ui::{
-        centre, hstack, place, vstack, Anchor, ButtonStyle, Dropdown, Flow, Focus, Insets, Length,
-        ScrollState, TableState, TextFieldState, Theme, Ui,
+        centre, hstack, place, vstack, Anchor, ButtonStyle, Drag, Dropdown, Flow, Focus, Insets,
+        Length, Menu, Overlay, ScrollState, TableState, TextAreaState, TextFieldState, Theme,
+        Tooltip, Ui,
     };
     pub use crate::windowing::{
         run_app, run_windows, CursorShape, PixelApp, Waker, WindowConfig, WindowRequest,

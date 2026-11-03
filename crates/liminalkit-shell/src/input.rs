@@ -357,6 +357,21 @@ impl Input {
         std::mem::take(&mut self.keys)
     }
 
+    /// Hand keys back that an input owner took early and did not use, so
+    /// what it draws later can still see them. A modal overlay takes every
+    /// key before the background draws and restores them for its own
+    /// controls. Unlike [`key`](Self::key), this does not start a new
+    /// interaction epoch: the keys are the same frame's keys, not new ones.
+    pub fn restore_keys(&mut self, keys: Vec<KeyInput>) {
+        if self.keys.is_empty() {
+            self.keys = keys;
+        } else {
+            let mut keys = keys;
+            keys.append(&mut self.keys);
+            self.keys = keys;
+        }
+    }
+
     /// Let one focused widget consume the key slice while retaining the
     /// collector's allocation for the next frame.
     ///

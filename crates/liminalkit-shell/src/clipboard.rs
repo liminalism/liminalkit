@@ -40,6 +40,9 @@ impl std::fmt::Debug for Clipboard {
     }
 }
 impl Default for Clipboard {
+    #[allow(clippy::derivable_impls)]
+    // Written out rather than derived: which fields exist depends on the
+    // target and on `cfg(test)`, and the derive's output would vary with them.
     fn default() -> Self {
         Self {
             #[cfg(target_os = "linux")]
@@ -105,11 +108,11 @@ impl Clipboard {
         }
         #[cfg(target_os = "linux")]
         {
-            return self.with_native(|clipboard| match clipboard.get_text() {
+            self.with_native(|clipboard| match clipboard.get_text() {
                 Ok(text) => Ok(Some(text)),
                 Err(arboard::Error::ContentNotAvailable) => Ok(None),
                 Err(error) => Err(error),
-            });
+            })
         }
         #[cfg(target_os = "macos")]
         return Ok(macos::get());

@@ -186,7 +186,7 @@ impl ShapedText {
 /// a little generous.
 ///
 /// This is a bound on what [`render`] produces, not typographic leading, so it
-/// includes the rasterizer's [`PADDING`] on both sides. `render_shaped` starts
+/// includes the rasterizer's `PADDING` on both sides. `render_shaped` starts
 /// its ink box at the face's nominal ascent and descent and only grows it, so
 /// the nominal height plus the padding covers every string that does not
 /// overshoot its own metrics.

@@ -54,7 +54,7 @@ pub enum DecodeError {
     /// A bit depth or colour type this decoder does not read — see the
     /// module docs for what is covered.
     Unsupported { bit_depth: u8, color_type: u8 },
-    /// `IHDR` declares a width or height past [`MAX_DIMENSION`] — refused
+    /// `IHDR` declares a width or height past `MAX_DIMENSION` — refused
     /// before any pixel buffer is allocated, so a tiny file cannot claim an
     /// enormous one.
     ImageTooLarge { width: u32, height: u32 },

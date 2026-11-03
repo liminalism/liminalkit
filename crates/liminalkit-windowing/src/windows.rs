@@ -380,7 +380,7 @@ impl<T> Windows<T> {
 
 // Manual rather than derived: derive would demand `T: Default`, and a window
 // payload has no business being defaultable.
-#[allow(clippy::derivable_impl)]
+#[allow(clippy::derivable_impls)]
 impl<T> Default for Windows<T> {
     fn default() -> Windows<T> {
         Windows::new()

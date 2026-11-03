@@ -1263,7 +1263,7 @@ impl TextFieldState {
         self.clipboard_error.as_deref()
     }
 
-    fn clipboard_keys(
+    pub(crate) fn clipboard_keys(
         &mut self,
         keys: &[KeyInput],
         modifiers: liminalkit_shell::Modifiers,
@@ -1327,7 +1327,7 @@ impl TextFieldState {
         changed
     }
 
-    fn finish_clipboard(&mut self, focused: bool, interaction_epoch: u64) -> bool {
+    pub(crate) fn finish_clipboard(&mut self, focused: bool, interaction_epoch: u64) -> bool {
         if !focused
             || self
                 .clipboard_edit
@@ -1440,7 +1440,7 @@ impl TextFieldState {
         self.selection_anchor = None;
     }
 
-    fn apply_accessible_edit(
+    pub(crate) fn apply_accessible_edit(
         &mut self,
         mut edit: liminalkit_shell::input::AccessibleTextEdit,
     ) -> bool {
@@ -1592,6 +1592,27 @@ impl TextFieldState {
     pub fn home(&mut self) {
         self.clear_selection();
         self.caret = 0;
+    }
+
+    /// Put the caret at byte offset `at`, snapped forward to a cluster
+    /// boundary and clamped to the text, dropping any selection: a click.
+    pub fn set_caret(&mut self, at: usize) {
+        self.clear_selection();
+        self.caret = self.caret_after_edit(at.min(self.text.len()));
+    }
+
+    /// Move the caret to `at` while keeping (or starting) a selection from
+    /// where it was: a shift-click, or a shift-arrow in a multi-line field.
+    pub fn select_to(&mut self, at: usize) {
+        let anchor = self.selection_anchor.unwrap_or(self.caret);
+        self.clipboard_edit = None;
+        self.caret = self.caret_after_edit(at.min(self.text.len()));
+        self.selection_anchor = Some(anchor);
+    }
+
+    /// The other end of the selection, or the caret when there is none.
+    pub fn selection_anchor(&self) -> usize {
+        self.selection_anchor.unwrap_or(self.caret)
     }
 
     pub fn end(&mut self) {

@@ -46,7 +46,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn new(x: i32, y: i32, w: i32, h: i32) -> Rect {
+    pub const fn new(x: i32, y: i32, w: i32, h: i32) -> Rect {
         Rect { x, y, w, h }
     }
 
@@ -512,7 +512,7 @@ mod tests {
         let mut kernel = crate::RasterKernel::new();
         Painter::new_premultiplied(&mut buffer).fill_circle_aa(&mut kernel, 6.0, 6.0, 4.3, 0, 255);
         assert!(
-            buffer.pixels.iter().any(|pixel| *pixel == 0xff00_0000),
+            buffer.pixels.contains(&0xff00_0000),
             "black objects are opaque, not treated as a transparency key"
         );
         assert!(buffer.pixels.iter().any(|pixel| {

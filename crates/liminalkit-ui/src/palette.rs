@@ -63,6 +63,9 @@ impl Appearance {
 }
 
 impl Default for Appearance {
+    #[allow(clippy::derivable_impls)]
+    // Spelled out so the default is visible here rather than in a `#[default]`
+    // attribute inside the enum.
     fn default() -> Self {
         Self::IndustrialLight
     }

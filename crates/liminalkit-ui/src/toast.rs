@@ -311,7 +311,7 @@ impl Ui<'_> {
             },
         );
         self.label(layout.dismiss, "×", theme.text, Align::Centre);
-        if activated(&mut self.input, layout.dismiss, dismiss_focused) {
+        if activated(self.input, layout.dismiss, dismiss_focused) {
             outcome.dismissed = true;
         }
 
@@ -352,7 +352,7 @@ impl Ui<'_> {
                 },
             );
             self.label(*chip, action.label, theme.text, Align::Centre);
-            if activated(&mut self.input, *chip, focused) {
+            if activated(self.input, *chip, focused) {
                 outcome.action = Some(action.key.to_owned());
             }
         }

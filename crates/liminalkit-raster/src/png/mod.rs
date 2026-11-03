@@ -1,5 +1,5 @@
 //! PNG in and out: an 8-bit writer for headless screenshots
-//! ([`encode`]/[`write`]), and a decoder ([`decode`]) for the PNGs a real
+//! ([`encode`]/[`write()`]), and a decoder ([`decode`]) for the PNGs a real
 //! icon theme ships. See `decode`'s module docs for exactly what is and is
 //! not read.
 

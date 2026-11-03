@@ -25,6 +25,19 @@ record pixelkit.evidence.adoptability-pass-tests/1 : evidence {
         """
 }
 
+record pixelkit.evidence.capabilities-pass-tests/1 : evidence {
+    title "Workspace tests pass with the new popups, drag, text area and adapter extensions"
+    state verified
+    result pass
+    method command
+    observed_at git:2d8fbfd3a2dea14ca91a6867bc64a2d3b25ea1b7
+    command "cargo test --workspace --features liminalkit/test-fonts; cargo test -p liminalkit -p liminalkit-ui --features liminalkit/test-fonts,liminalkit/accessibility,liminalkit-ui/accessibility"
+    summary """
+        541 tests pass across the workspace (7 overlay, 4 menu, 4 drag, 6 text-area, 3 adapter among them); 191 pass for liminalkit and liminalkit-ui with the accessibility feature on, exercising App's semantics collection path. cargo fmt --all --check clean.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.coverage-simd-profile/1 : evidence {
     title "On this aarch64 Mac, median ns/row scalar versus dispatched path were 0.78/1.00 at 8 bytes, 1.50/1.75 at 32, 4.51/4.49 at 256, and 50.45/49.24 at 4096. Only the 4096-byte row selects explicit SIMD; its small gain needs confirmation on other machines."
     state verified
@@ -169,4 +182,17 @@ record pixelkit.evidence.windowing-tests/1 : evidence {
     summary """
         393 passed, 0 failed across all five crates (windowing 66, shell 25, ui 75, raster 116, text 111)
         """
+}
+
+record pixelkit.evidence.workspace-lint-and-docs-clean/1 : evidence {
+    title "Clippy and rustdoc clean for the whole workspace"
+    state verified
+    result pass
+    method command
+    observed_at git:2d8fbfd3a2dea14ca91a6867bc64a2d3b25ea1b7
+    command "cargo clippy --workspace --all-targets --features liminalkit/test-fonts,liminalkit/accessibility; RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --no-deps --features liminalkit/test-fonts,liminalkit/accessibility"
+    summary """
+        Zero clippy warnings on every target and zero rustdoc warnings across all seven crates after fixing the eight pre-existing clippy warnings (clipboard, painter, windows, host, palette, toast) and the four broken intra-doc links (raster png, text layout and text).
+        """
+    author "dk"
 }

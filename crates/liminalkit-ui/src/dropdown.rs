@@ -82,6 +82,18 @@ impl Dropdown {
         self.open.is_some()
     }
 
+    /// Open the popup hung from `anchor` without a field: what a context
+    /// menu is. A zero-height anchor never receives the field click that
+    /// would otherwise close the popup.
+    pub(crate) fn open_at(&mut self, anchor: Rect, options: &[&str], selected: usize) {
+        self.open = Some(Open {
+            field: anchor,
+            options: options.iter().map(|option| (*option).to_owned()).collect(),
+            selected: selected.min(options.len().saturating_sub(1)),
+            pending: None,
+        });
+    }
+
     pub fn close(&mut self) {
         self.open = None;
     }

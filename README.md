@@ -113,17 +113,13 @@ Drawing is fills, strokes, and closed paths under the non-zero or even-odd rule,
 
 Text shaping covers the lookups used by the bundled Latin and Thai sample fonts, including ligatures, kerning, and mark attachment. It is not a full Unicode shaper. Unsupported lookups are skipped. A text field edits on extended-grapheme boundaries and keeps the stored UTF-8 un-normalized. Committed key text is applied to `TextFieldState`. IME preedit is painted from `Input`.
 
-The controls are the ones an operational screen is made of: labels, buttons, tabs, checkboxes, toggles, radios, dropdowns, text fields, and tables and lists that draw only the visible rows. `Theme` holds semantic colours and sizes. `OperationalPalette` is a shared light and dark vocabulary, so screens can differ in layout and still belong to one installation. Chrome that mixes several meanings on one screen takes its colours as arguments. Tooltips are requested while drawing and painted after the rest of the frame, so they sit above it.
+The controls are the ones an operational screen is made of: labels, buttons, tabs, checkboxes, toggles, radios, dropdowns, context menus, single- and multi-line text fields, modal dialogs and popovers, drag and drop, and tables and lists that draw only the visible rows. `Theme` holds semantic colours and sizes. `OperationalPalette` is a shared light and dark vocabulary, so screens can differ in layout and still belong to one installation. Chrome that mixes several meanings on one screen takes its colours as arguments. Tooltips are requested while drawing and painted after the rest of the frame, so they sit above it.
 
-`accessibility` on `liminalkit-ui` and `liminalkit-windowing` can expose the controls that were drawn, through AccessKit. It is off unless the application opts in.
+`accessibility` on `liminalkit-ui` and `liminalkit-windowing` can expose the controls that were drawn, through AccessKit. It is off unless the application opts in. Under `App` the same feature publishes the tree and routes actions without any work in the screen; this has been exercised in tests, not yet with a screen reader.
 
-An open dropdown owns input before the background draws. Call
-`dropdown.handle_input(&mut input, bounds, scale.px(theme.row_height))` at the
-start of each frame, before constructing `Ui` or calling `with_focus`. Draw the
-field and background, then call `dropdown.draw(&mut ui, bounds)` last; its return
-value reports the selected option. The prepass consumes popup clicks, dismissal
-clicks and keys so background controls cannot activate through the popup. Changing
-the field geometry or options closes the old popup and discards queued picks.
+### Popups and overlays
+
+Immediate mode has no z-order, so anything that floats above the screen is drawn last and claims its input first. `Dropdown`, `Menu` (a context menu opened by a right-click or at a point), and `Overlay` (a modal dialog centred in the window, or a popover hung from a control) all work the same way: a value the screen owns; a `handle_input` call at the start of the frame, before the `Ui` is built, that takes the popup's clicks and keys so the background cannot act on them (`Screen::before_frame` under `App`); and a `draw` call at the end of the frame that paints it above everything and reports what happened. A dialog keeps its own `Focus`, so Tab stays inside it. `Drag` carries a payload from a source rectangle to a target one and draws its ghost last. `TextAreaState` is the multi-line field: wrapped lines, Up and Down by line, Home and End by line, Enter for a line break, over the same grapheme-safe editing as the single-line field.
 
 ## Touch
 
@@ -177,7 +173,7 @@ cargo run -p liminalkit-kms --example probe
 
 ## Contributing
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md) has the build, test, and review expectations. `AGENTS.md` describes the project's knowledge ledger, which contributors do not need to use.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the map: crates, the frame, units, focus, popups, the two hosts. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the build, test, and review expectations. `AGENTS.md` describes the project's knowledge ledger, which contributors do not need to use.
 
 ## License
 

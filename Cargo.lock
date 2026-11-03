@@ -1144,6 +1144,7 @@ dependencies = [
 name = "liminalkit"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "liminalkit-kms",
  "liminalkit-raster",
  "liminalkit-shell",

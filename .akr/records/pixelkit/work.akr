@@ -13,7 +13,7 @@ record pixelkit.work.accessibility-validation/1 : work {
         Give App<S> the accessibility feature: own a Semantics, attach it with Ui::with_semantics every frame, publish the tree through PixelApp::accessibility_tree and route actions back through Input, so a Screen gets a screen-reader tree without implementing PixelApp. Then test, by hand, with Orca on Linux and VoiceOver on macOS: Tab and typed-focus transitions announce the right control, a modal dropdown hides the background controls, text fields report value and caret, and an action request on a button activates it. Record the findings as evidence with the AT version.
         """
     note """
-        Not started. The adapter currently documents that it does not publish a tree.
+        The adapter half was done 2026-11-03: with the `accessibility` feature App owns a Semantics, begins it with the window or Screen::title each frame, attaches it to the Ui, publishes Semantics::update from accessibility_tree, routes on_accessibility_action through Semantics::action, and invalidates on layout change and focus reset. Overlay marks modal frames. What remains is the assistive-technology testing, which needs a person at a machine with Orca or VoiceOver.
         """
     after [ @pixelkit.work.adoptability-pass ]
     implements [ @pixelkit.decision.facade-crate-and-app-adapter ]
@@ -170,10 +170,10 @@ record pixelkit.work.public-docs/1 : work {
     state proposed
     scope [ path "README.md", path "crates/*/src/lib.rs", path "docs/**" ]
     intent """
-        Add to the README a screenshot of a real Lege screen and of a kiosk screen on a Pi, and the gallery render. Write docs/ARCHITECTURE.md (the crates, the frame lifecycle, units, focus, the two hosts, the presenter seam) and a short tutorial that grows hello.rs into a form with a table and a dropdown. Give every crate a README and a lib.rs doc that answers what it is for and what it is not, written for someone who has not read the others. Make RUSTDOCFLAGS=-D warnings clean for the whole workspace (two broken links in liminalkit-raster png/ today) and keep it clean in CI.
+        Add to the README a screenshot of a real Lege screen and of a kiosk screen on a Pi, and the gallery render. Write docs/ARCHITECTURE.md (the crates, the frame lifecycle, units, focus, the two hosts, the presenter seam) and a short tutorial that grows hello.rs into a form with a table and a dropdown. Give every crate a README and a lib.rs doc that answers what it is for and what it is not, written for someone who has not read the others. Make RUSTDOCFLAGS=-D warnings clean for the whole workspace and keep it clean in CI.
         """
     note """
-        Not started. The README's positioning and quick start were done in the adoptability pass; this is the rest of the documentation row.
+        docs/ARCHITECTURE.md and a warnings-clean rustdoc for the whole workspace were done 2026-11-03. Still open: the screenshots (need a Lege build and a Pi), the tutorial, per-crate READMEs, and a CI job that runs the doc check.
         """
     after [ @pixelkit.work.adoptability-pass ]
     source {
@@ -278,14 +278,32 @@ record pixelkit.work.touchscreen/1 : work {
 
 record pixelkit.work.ui-capabilities/1 : work {
     title "Dialogs, menus, overlays, drag-and-drop and multi-line text, as caller-owned state"
-    state proposed
+    state completed
     scope [ path "crates/liminalkit-ui/**" ]
     intent """
         Add the capabilities an operational application reaches for next, each in the shape Dropdown already has: a value the screen owns, an input prepass that claims clicks and keys before the background draws, and a draw call that runs last. A modal dialog (scrim, focus trapped inside, Escape and a result enum); a context menu and a menu bar sharing the popup machinery; a generic overlay/popover anchored to a rect; in-app drag-and-drop between lists with a caller-owned DragState (OS file drops already arrive through on_file_drop); a multi-line text field with wrapping, vertical scrolling and the same grapheme-boundary editing as the single-line one. Every one of these must state in its signature what it owns and what persists between frames.
         """
     note """
-        Not started. Ordered after the layout, focus and adapter work on purpose: the review's advice is to make the architecture easy to adopt before expanding the widget set.
+        Done 2026-11-03 in liminalkit-ui: overlay.rs (Overlay with open_dialog/open_popover, Placement, its own Focus, keys taken in handle_input and restored in draw via the new Input::restore_keys), menu.rs (Menu over Dropdown's popup with Ui::context_menu and menu_width), drag.rs (Drag<T> with source/target/ghost and a press threshold that leaves clicks to the control), textarea.rs (TextAreaState over TextFieldState: wrapped paragraphs, Up/Down keeping the column, line Home/End, Enter, click placement, caret kept in view). A menu bar was not built: a context menu at a point covers the operational case and a bar is the same popup anchored to a strip, left for when a screen needs it.
         """
+    acceptance {
+        check capability-tests {
+            statement """
+                Overlay, Menu, Drag and TextAreaState each have state-level tests covering open, claim-before-background, dismiss, and the keyboard paths, and the workspace suite passes.
+                """
+            method command
+            command "cargo test --workspace --features liminalkit/test-fonts"
+            verified_by [ @pixelkit.evidence.capabilities-pass-tests/1 ]
+        }
+        check lint-clean {
+            statement """
+                The new modules add no clippy or rustdoc warnings.
+                """
+            method command
+            command "cargo clippy --workspace --all-targets --features liminalkit/test-fonts,liminalkit/accessibility && RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --no-deps --features liminalkit/test-fonts,liminalkit/accessibility"
+            verified_by [ @pixelkit.evidence.workspace-lint-and-docs-clean/1 ]
+        }
+    }
     after [ @pixelkit.work.adoptability-pass ]
     implements [ @pixelkit.policy.explicit-state-toolkit ]
     source {

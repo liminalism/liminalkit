@@ -17,7 +17,7 @@
 //! would be, and it stays correct when the font is replaced.
 //!
 //! Scope is exactly what the embedded face uses, verified by
-//! [`tests::the_face_uses_only_lookups_this_module_implements`]:
+//! the `the_face_uses_only_lookups_this_module_implements` test:
 //!
 //! | Table | Lookup types |
 //! |---|---|

@@ -15,13 +15,20 @@
 //! per-frame [`Context`] is how a screen talks back to the host: quit,
 //! retitle, change the cursor, place the IME caret.
 //!
-//! What `App` does not do: publish an accessibility tree (use `PixelApp`
-//! with the `accessibility` feature), arbitrate touch gestures (the first
-//! contact is forwarded as a pointer press through [`TouchPointer`], which
-//! is activation on press, not a tap recognizer), or open more windows.
-//! Each of these is a [`Screen`] hook away from the underlying trait, and a
-//! screen that needs them can implement `PixelApp` instead; `App`'s source
-//! is the worked example of how.
+//! Popups own input before the background draws. A dropdown, menu or
+//! overlay that is open claims its clicks and keys in
+//! [`Screen::before_frame`], which runs on the frame's [`Input`] before the
+//! `Ui` is built and before Tab traversal looks at the keys; the same popup
+//! is then drawn last at the end of [`Screen::draw`].
+//!
+//! With the `accessibility` feature, `App` publishes the controls each frame
+//! drew to assistive technology through AccessKit and routes action requests
+//! back into the input, so a screen gets a screen-reader tree without
+//! implementing `PixelApp`. What `App` does not do: arbitrate touch gestures
+//! (the first contact is forwarded as a pointer press through
+//! [`TouchPointer`], which is activation on press, not a tap recognizer).
+//! A screen that needs that implements `PixelApp` instead; `App`'s source is
+//! the worked example of how.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -31,7 +38,7 @@ use liminalkit_shell::{Input, KeyInput, Modifiers, MouseButton, Scale, TouchEven
 use liminalkit_text::{FontSet, TextCache};
 use liminalkit_ui::{Focus, Theme, Ui};
 use liminalkit_windowing::{
-    run_app, CursorShape, ImeCursorArea, ImeEvent, PixelApp, Waker, WindowConfig,
+    run_app, CursorShape, ImeCursorArea, ImeEvent, PixelApp, Waker, WindowConfig, WindowRequest,
 };
 
 /// What a screen can ask of the host during one frame, and what the host
@@ -61,6 +68,10 @@ pub struct Context {
     pub reset_focus: bool,
     /// Whether the host reported a dark system theme; `None` until it has.
     pub dark: Option<bool>,
+    /// Windows to open, or `WindowRequest::Close` for this one, drained by
+    /// the host after the frame. A new window needs its own application:
+    /// `Box::new(App::new(other_screen, fonts))`.
+    pub windows: Vec<WindowRequest>,
     keys: Vec<KeyInput>,
 }
 
@@ -81,6 +92,20 @@ pub trait Screen {
     /// answer. Rectangles are device pixels: `ui.rect(..)` converts a
     /// logical one.
     fn draw(&mut self, ui: &mut Ui<'_>, ctx: &mut Context);
+
+    /// Claim input before anything draws. An open popup goes here:
+    /// `self.menu.handle_input(input, bounds, row_h)`,
+    /// `self.overlay.handle_input(input, bounds, ctx.scale)`. `bounds` is
+    /// the window in device pixels. Runs before the `Ui` is built, so the
+    /// keys a popup takes are never seen by the background's controls or by
+    /// Tab traversal.
+    fn before_frame(&mut self, _input: &mut Input, _bounds: Rect, _ctx: &Context) {}
+
+    /// The window title, for the accessibility tree's root and the title
+    /// bar when `Context::title` has not set one.
+    fn title(&self) -> &str {
+        ""
+    }
 
     /// A key arrived. Return `true` to keep it from the controls. The
     /// default hands every key on.
@@ -147,6 +172,10 @@ pub struct App<S: Screen> {
     cursor: CursorShape,
     ime_caret: Option<Rect>,
     dark: Option<bool>,
+    windows: std::collections::VecDeque<WindowRequest>,
+    window_title: String,
+    #[cfg(feature = "accessibility")]
+    semantics: liminalkit_ui::semantics::Semantics,
 }
 
 impl<S: Screen> App<S> {
@@ -167,6 +196,10 @@ impl<S: Screen> App<S> {
             cursor: CursorShape::Default,
             ime_caret: None,
             dark: None,
+            windows: std::collections::VecDeque::new(),
+            window_title: String::new(),
+            #[cfg(feature = "accessibility")]
+            semantics: liminalkit_ui::semantics::Semantics::default(),
         }
     }
 
@@ -192,10 +225,11 @@ impl<S: Screen> App<S> {
 
     /// Open a window and run until the screen asks to exit or the window is
     /// closed.
-    pub fn run(self, config: WindowConfig) -> Result<(), Box<dyn std::error::Error>>
+    pub fn run(mut self, config: WindowConfig) -> Result<(), Box<dyn std::error::Error>>
     where
         S: 'static,
     {
+        self.window_title = config.title.clone();
         run_app(self, config)
     }
 
@@ -220,9 +254,10 @@ pub fn run<S: Screen + 'static>(
 
 impl<S: Screen> PixelApp for App<S> {
     fn render(&mut self, buffer: &mut WindowBuffer, scale: Scale) {
+        let size = (buffer.width as i32, buffer.height as i32);
         let mut ctx = Context {
             scale,
-            size: (buffer.width as i32, buffer.height as i32),
+            size,
             exit: false,
             title: None,
             fullscreen: None,
@@ -230,10 +265,23 @@ impl<S: Screen> PixelApp for App<S> {
             ime_caret: None,
             reset_focus: false,
             dark: self.dark,
-            keys: self.input.keys().to_vec(),
+            windows: Vec::new(),
+            keys: Vec::new(),
         };
+        self.screen
+            .before_frame(&mut self.input, Rect::new(0, 0, size.0, size.1), &ctx);
+        ctx.keys = self.input.keys().to_vec();
         {
-            let mut ui = Ui::new(
+            let title = if self.screen.title().is_empty() {
+                self.window_title.clone()
+            } else {
+                self.screen.title().to_owned()
+            };
+            #[cfg(feature = "accessibility")]
+            self.semantics.begin(&title);
+            #[cfg(not(feature = "accessibility"))]
+            let _ = title;
+            let ui = Ui::new(
                 Painter::new(buffer),
                 &mut self.text,
                 &mut self.input,
@@ -242,17 +290,46 @@ impl<S: Screen> PixelApp for App<S> {
                 &mut self.kernel,
             )
             .with_focus(&mut self.focus);
+            #[cfg(feature = "accessibility")]
+            let mut ui = ui.with_semantics(&mut self.semantics);
+            #[cfg(not(feature = "accessibility"))]
+            let mut ui = ui;
             self.screen.draw(&mut ui, &mut ctx);
             ui.input.end_frame();
         }
         self.exit |= ctx.exit;
+        if let Some(title) = &ctx.title {
+            self.window_title.clone_from(title);
+        }
         self.title = ctx.title.or(self.title.take());
         self.fullscreen = ctx.fullscreen.or(self.fullscreen.take());
         self.cursor = ctx.cursor;
         self.ime_caret = ctx.ime_caret;
+        self.windows.extend(ctx.windows);
         if ctx.reset_focus {
             self.focus.reset();
+            #[cfg(feature = "accessibility")]
+            self.semantics.invalidate();
         }
+    }
+
+    fn on_layout_changed(&mut self) {
+        #[cfg(feature = "accessibility")]
+        self.semantics.invalidate();
+    }
+
+    fn poll_window(&mut self) -> Option<WindowRequest> {
+        self.windows.pop_front()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn accessibility_tree(&mut self) -> Option<accesskit::TreeUpdate> {
+        Some(self.semantics.update())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn on_accessibility_action(&mut self, request: accesskit::ActionRequest) {
+        self.semantics.action(&mut self.input, request);
     }
 
     fn attach(&mut self, waker: Waker) {

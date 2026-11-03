@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:fd42cabbcc17b76c39dd2d16b5523ba08e83e922c80748ff0f95e60b73c6a880"
+    source_graph "sha256:995d75f4270cffbd0c4e5869430d3a23f642165e5299b590c05ec5f2cd30e332"
 }
 
 source ".akr/project.akr" {
@@ -14,18 +14,18 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/decisions.akr" {
-    hash "sha256:f5d163dae803c07c5fdf67c6dac026ead1f94d47f51145f60af905dd6ed3af48"
-    records 2
+    hash "sha256:95a89b6118f839be761f8812c938327a27a8234768b4b62718d077a3f2f37986"
+    records 3
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:0d7008fe10d4cbeea4fcb023630e68a12cdbdd939e81dc5809efe428f8490a3d"
-    records 14
+    hash "sha256:360011a9a7701883f76b16014732d38af31956011424ceddd97dd192c8ce18ae"
+    records 16
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
-    hash "sha256:30c0666c7ca56668535915542afe9ffcc241a8ae335d32c5275be8bb657046d7"
-    records 14
+    hash "sha256:45f20dc826dc4cd77709a16ee8094e7cf1849119f48154b9b058b511f31fa4f6"
+    records 15
 }
 
 source ".akr/records/pixelkit/policies.akr" {
@@ -39,7 +39,7 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:fcbf7fd1afee2c551e74ddcd887d3ad5b261a7bd2e80131a0af41bc61dad91bd"
+    hash "sha256:c78d406236af0c4cf2ad85690129213ef3cfc342116e05ea94fd8fdc436a6e85"
     records 13
 }
 
@@ -50,6 +50,12 @@ resolution @pixelkit.decision.device-pixel-rects/1 {
 }
 
 resolution @pixelkit.decision.facade-crate-and-app-adapter/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.popups-claim-input-first/1 {
     slot implements
     to @pixelkit.policy.explicit-state-toolkit/1
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
@@ -124,7 +130,7 @@ resolution @pixelkit.work.publish-packaging/1 {
 resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.public-docs/1
-    hash "sha256:00eed795afd6c038eaef93526e454620b436f3934f5b3adc83dcd3443a323267"
+    hash "sha256:cd40e34876437e9e0576909a1bc61845f22f3959b5c8a8f5951f1c623d339f91"
 }
 
 resolution @pixelkit.work.text-shaping-fallback/1 {
@@ -159,6 +165,11 @@ seal @pixelkit.evidence.adoptability-pass-clippy-doc/1 {
 seal @pixelkit.evidence.adoptability-pass-tests/1 {
     state verified
     hash "sha256:103faaea9aab876a0eff2d36dc513566e5ed6e13e2cf9b8913d68f967fa7c6c2"
+}
+
+seal @pixelkit.evidence.capabilities-pass-tests/1 {
+    state verified
+    hash "sha256:d2b650053803b068c50b3fc617fceb59507b3558c6411faab364fdfa051fefed"
 }
 
 seal @pixelkit.evidence.coverage-simd-profile/1 {
@@ -221,6 +232,11 @@ seal @pixelkit.evidence.windowing-tests/1 {
     hash "sha256:e4093c7277ffed9e41a58c0a874a0613cd287a42e0992b9a4a15772499f82b4d"
 }
 
+seal @pixelkit.evidence.workspace-lint-and-docs-clean/1 {
+    state verified
+    hash "sha256:47d1305b38903083b0c6432c17d05320417d5991ffca8c845466b7b0d5606646"
+}
+
 seal @pixelkit.papercut.a-standalone-audit-harness-importing-the-kms/1 {
     state verified
     hash "sha256:0f10db38f38ff756c852f18ff4d78ad4f35fd2382ee9ba03cb1032a5981cc229"
@@ -234,6 +250,11 @@ seal @pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 {
 seal @pixelkit.papercut.building-docs-with-rustdocflags-d-warnings/1 {
     state verified
     hash "sha256:49d6ac962a390bdf5ea92dff8a90d95d33ed4708f5b6f145905cc64f58b0f7b7"
+}
+
+seal @pixelkit.papercut.closing-a-papercut-through-knowledge-revise/1 {
+    state verified
+    hash "sha256:e15750a356a7c84e8da56549c2922ecc6571ab647ee4ae8e161fed61c547df3b"
 }
 
 seal @pixelkit.papercut.creating-the-interaction-lifecycle-work-record/1 {
@@ -314,6 +335,11 @@ seal @pixelkit.work.touch-interactions/1 {
 seal @pixelkit.work.touchscreen/1 {
     state completed
     hash "sha256:6a4ee53111d802324a95c622ac4470537d2abee42f744b6d28ad4e1ee2da9d48"
+}
+
+seal @pixelkit.work.ui-capabilities/1 {
+    state completed
+    hash "sha256:6759cd7a82fbb36d5c6b44b8c912cfba84b211012305f8e5bca8d3aedbc5223b"
 }
 
 seal @pixelkit.work.windowing-crate/1 {
