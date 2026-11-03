@@ -1,0 +1,63 @@
+[package]
+name = "liminalkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Explicit-state, software-rendered GUI toolkit for Rust: caller-owned state, immediate-mode controls, a pixel buffer, and the same application on a desktop window or a bare Linux display."
+repository = "https://github.com/liminalism/liminalkit"
+readme = "../../README.md"
+keywords = ["gui", "ui", "immediate-mode", "software-rendering", "kiosk"]
+categories = ["gui", "rendering", "embedded"]
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+liminalkit-text = { workspace = true }
+liminalkit-shell = { workspace = true }
+liminalkit-ui = { workspace = true }
+liminalkit-windowing = { workspace = true }
+liminalkit-kms = { workspace = true, optional = true }
+
+[dev-dependencies]
+liminalkit-text = { workspace = true, features = ["test-fonts"] }
+
+[features]
+default = []
+# The bundled Noto faces, for examples, tests and a first run. Application
+# builds leave it off and embed their own fonts.
+test-fonts = ["liminalkit-text/test-fonts", "liminalkit-ui/test-fonts"]
+# Expose drawn controls to assistive technology through AccessKit.
+accessibility = ["liminalkit-ui/accessibility", "liminalkit-windowing/accessibility"]
+# The Linux DRM/KMS and evdev host, as `liminalkit::kms`.
+kms = ["dep:liminalkit-kms"]
+
+[[example]]
+name = "hello"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "window"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "window_lowlevel"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "panes"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "multi"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "touch"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "touch_tuning"
+required-features = ["test-fonts"]
+
+[lints]
+workspace = true

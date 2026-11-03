@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "What a window host and a liminalkit application share: per-frame input, logical-to-physical scale, the presenter seam, touch contacts and the clipboard."
 
 [dependencies]
 liminalkit-raster = { workspace = true }

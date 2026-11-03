@@ -1,0 +1,20 @@
+akr 0.1
+project pixelkit
+
+record pixelkit.question.publish-readiness/1 : question {
+    title "What has to be true before liminalkit is published as an experimental 0.1?"
+    state open
+    scope [ all ]
+    question """
+        The outside review (source outside-review-2026-11-03) judged the toolkit worth publishing as an experimental 0.1 once it has a well-defined purpose, a reliable way for someone else to start, and credible evidence it fulfils that purpose. The owner said on 2026-11-03 that it is not ready. Which of the open work records (performance comparison, hardware validation, text fallback, public docs, accessibility validation, UI capabilities) are prerequisites, and which can follow a first release?
+        """
+    blocks [ @pixelkit.work.publish-packaging ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            The final assessment's three conditions for an experimental release.
+            """
+    }
+}

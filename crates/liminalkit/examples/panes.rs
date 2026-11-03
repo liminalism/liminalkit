@@ -7,15 +7,15 @@
 //! `Q` quits.
 //!
 //! ```sh
-//! cargo run -p liminalkit-windowing --example panes
+//! cargo run -p liminalkit --features test-fonts --example panes
 //! ```
 
-use liminalkit_raster::{Painter, RasterKernel, Rect, WindowBuffer};
-use liminalkit_shell::{Input, KeyInput, MouseButton, Scale};
-use liminalkit_text::font::test_fonts::{set, LATIN};
-use liminalkit_text::{Align, TextCache, TextStyle};
-use liminalkit_ui::{Theme, Ui};
-use liminalkit_windowing::{
+use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
+use liminalkit::shell::{Input, KeyInput, MouseButton, Scale};
+use liminalkit::text::font::test_fonts::{set, LATIN};
+use liminalkit::text::{Align, TextCache, TextStyle};
+use liminalkit::ui::{Theme, Ui};
+use liminalkit::windowing::{
     run_app, CursorShape, PaneId, PaneMetrics, Panes, PixelApp, Side, WindowConfig, WindowMetrics,
     Windows,
 };

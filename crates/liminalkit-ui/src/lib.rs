@@ -19,9 +19,12 @@ pub mod widget;
 
 pub use chrome::ButtonStyle;
 pub use dropdown::Dropdown;
-pub use focus::Focus;
+pub use focus::{Focus, FocusKey};
 pub use form::{CHECKBOX_SIZE, RADIO_SIZE, TOGGLE_SIZE};
-pub use layout::{columns_per_row, grid, grid_content_height, grid_item, grid_visible_range};
+pub use layout::{
+    centre, columns_per_row, grid, grid_content_height, grid_item, grid_visible_range, hstack,
+    place, stack_lengths, vstack, Anchor, Flow, Insets, Length,
+};
 pub use list::{ScrollList, ScrollState};
 pub use palette::{Appearance, OperationalPalette};
 pub use toast::{

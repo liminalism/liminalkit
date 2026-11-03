@@ -69,7 +69,7 @@ impl Ui<'_> {
             if focused {
                 self.px(theme.focus_width)
             } else {
-                theme.border_width
+                self.px(theme.border_width)
             },
             fill,
             edge,
@@ -101,7 +101,7 @@ impl Ui<'_> {
         }
 
         if !label.is_empty() {
-            let gap = theme.padding / 2;
+            let gap = self.px(theme.padding / 2);
             let label_area = Rect::new(
                 box_rect.right() + gap,
                 area.y,
@@ -164,7 +164,7 @@ impl Ui<'_> {
             .fill_circle_aa(self.kernel, cx, cy, knob_r, theme.text, 255);
 
         if !label.is_empty() {
-            let gap = theme.padding / 2;
+            let gap = self.px(theme.padding / 2);
             let label_area = Rect::new(
                 track.right() + gap,
                 area.y,
@@ -254,7 +254,7 @@ impl Ui<'_> {
                     .fill_circle_aa(self.kernel, cx, cy, inner_r, theme.accent, 255);
             }
 
-            let gap = theme.padding / 2;
+            let gap = self.px(theme.padding / 2);
             let label_area = Rect::new(
                 row.x + dot_d + gap,
                 row.y,

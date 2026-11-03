@@ -40,6 +40,21 @@ impl Scale {
         logical * self.0
     }
 
+    /// A rectangle in logical pixels to device pixels. Each edge is rounded
+    /// on its own, so two logical rectangles that share an edge still share
+    /// it after scaling, with no gap or overlap between them.
+    #[inline]
+    pub fn rect(self, logical: liminalkit_raster::Rect) -> liminalkit_raster::Rect {
+        let x = self.px(logical.x);
+        let y = self.px(logical.y);
+        liminalkit_raster::Rect::new(
+            x,
+            y,
+            self.px(logical.right()) - x,
+            self.px(logical.bottom()) - y,
+        )
+    }
+
     /// Physical back to logical, for the rare thing that reports up.
     #[inline]
     pub fn logical(self, physical: i32) -> f32 {
@@ -71,5 +86,20 @@ mod tests {
         assert_eq!(Scale(0.75).hairline(), 1);
         assert_eq!(Scale(2.0).px(288), 576);
         assert_eq!(Scale::ONE.px(17), 17);
+    }
+
+    #[test]
+    fn scaled_rectangles_that_shared_an_edge_still_share_it() {
+        use liminalkit_raster::Rect;
+        let s = Scale(1.5);
+        let top = s.rect(Rect::new(0, 0, 100, 33));
+        let bottom = s.rect(Rect::new(0, 33, 100, 33));
+        assert_eq!(top.bottom(), bottom.y);
+        assert_eq!(top, Rect::new(0, 0, 150, 50));
+        assert_eq!(bottom, Rect::new(0, 50, 150, 49));
+        assert_eq!(
+            Scale::ONE.rect(Rect::new(3, 4, 5, 6)),
+            Rect::new(3, 4, 5, 6)
+        );
     }
 }

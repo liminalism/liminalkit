@@ -1,15 +1,15 @@
 //! A live window: the gallery's controls, interactive, with the frame timer.
 //!
 //! ```sh
-//! LIMINALKIT_FRAME_LOG=1 cargo run -p liminalkit-ui --example window --features test-fonts
+//! LIMINALKIT_FRAME_LOG=1 cargo run -p liminalkit --features test-fonts --example window_lowlevel
 //! ```
 
-use liminalkit_raster::{Painter, RasterKernel, Rect, WindowBuffer};
-use liminalkit_shell::{Input, KeyInput, MouseButton, Scale};
-use liminalkit_text::font::test_fonts::{set, LATIN};
-use liminalkit_text::{Align, TextCache, TextStyle};
-use liminalkit_ui::{ButtonStyle, ScrollState, Theme, Ui};
-use liminalkit_windowing::{run_app, PixelApp, WindowConfig};
+use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
+use liminalkit::shell::{Input, KeyInput, MouseButton, Scale};
+use liminalkit::text::font::test_fonts::{set, LATIN};
+use liminalkit::text::{Align, TextCache, TextStyle};
+use liminalkit::ui::{ButtonStyle, ScrollState, Theme, Ui};
+use liminalkit::windowing::{run_app, PixelApp, WindowConfig};
 
 struct Demo {
     text: TextCache,

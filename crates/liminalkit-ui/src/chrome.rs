@@ -2,7 +2,7 @@
 //! Small flat-design controls: text buttons, underline tabs, segmented
 //! controls, steppers, tracks, dots and pills.
 //!
-//! These take their colours as arguments rather than from [`Theme`], because
+//! These take their colours as arguments rather than from [`Theme`](crate::Theme), because
 //! a terminal's chrome mixes several palettes on one screen (bid/ask, ok/
 //! warning/danger) and a theme field per combination would be a worse API
 //! than passing the colour.

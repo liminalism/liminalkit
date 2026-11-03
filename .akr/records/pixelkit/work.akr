@@ -1,6 +1,212 @@
 akr 0.1
 project pixelkit
 
+record pixelkit.work.accessibility-validation/1 : work {
+    title "Accessibility through the App adapter, tested with real assistive technology"
+    state proposed
+    scope [
+        path "crates/liminalkit-ui/src/semantics.rs",
+        path "crates/liminalkit-windowing/src/host.rs",
+        path "crates/liminalkit/src/app.rs"
+    ]
+    intent """
+        Give App<S> the accessibility feature: own a Semantics, attach it with Ui::with_semantics every frame, publish the tree through PixelApp::accessibility_tree and route actions back through Input, so a Screen gets a screen-reader tree without implementing PixelApp. Then test, by hand, with Orca on Linux and VoiceOver on macOS: Tab and typed-focus transitions announce the right control, a modal dropdown hides the background controls, text fields report value and caret, and an action request on a button activates it. Record the findings as evidence with the AT version.
+        """
+    note """
+        Not started. The adapter currently documents that it does not publish a tree.
+        """
+    after [ @pixelkit.work.adoptability-pass ]
+    implements [ @pixelkit.decision.facade-crate-and-app-adapter ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            Section 3: practical accessibility needs testing across focus transitions, modal dialogs, text fields and assistive technologies.
+            """
+    }
+}
+
+record pixelkit.work.adoptability-pass/1 : work {
+    title "Adoptability pass from the 2026-11-03 outside review: layout solvers, typed focus, App adapter, units contract, facade crate"
+    state completed
+    scope [
+        path "CONTRIBUTING.md",
+        path "Cargo.toml",
+        path "README.md",
+        path "crates/liminalkit-shell/src/scale.rs",
+        path "crates/liminalkit-ui/**",
+        path "crates/liminalkit-windowing/Cargo.toml",
+        path "crates/liminalkit/**"
+    ]
+    intent """
+        Make the existing architecture usable by callers who did not build it, without changing it: stateless stack/flow/inset/alignment layout solvers in liminalkit-ui::layout; Focus<K> generic over a caller-supplied key with register_id/register_id_at while Focus<usize> keeps the positional API; theme dimensional tokens scaled at every use site so the documented units contract holds at HiDPI, plus Ui::rect, Ui::metrics and Scale::rect; a top-level liminalkit crate with re-exports, a prelude, and the App/Screen/Context adapter; cross-crate examples moved there (hello, window, window_lowlevel, panes, multi, touch, touch_tuning) ending the ui/windowing dev-dependency cycle; crate descriptions, repository and workspace version requirements; README repositioned around why-this-and-not-egui with a quick start and Units/Layout/Keyboard-focus sections; CONTRIBUTING.md that does not depend on AKR.
+        """
+    note """
+        Done in one session on 2026-11-03. Publishing to crates.io was explicitly out of scope by the owner's instruction; the packaging metadata added is inert until that decision is made.
+        """
+    acceptance {
+        check hidpi-proportions {
+            statement """
+                The gallery rendered at 2x keeps the same proportions as at 1x, showing theme sizes follow the scale.
+                """
+            method observation
+            verified_by [ @pixelkit.evidence.gallery-renders-at-2x/1 ]
+        }
+        check lint-and-docs {
+            statement """
+                No clippy warnings in new or changed code; rustdoc with warnings denied is clean for liminalkit, liminalkit-ui and liminalkit-shell.
+                """
+            method command
+            command "cargo clippy --workspace --all-targets --features liminalkit/test-fonts && RUSTDOCFLAGS=\"-D warnings\" cargo doc -p liminalkit -p liminalkit-ui -p liminalkit-shell --no-deps --features liminalkit/test-fonts"
+            verified_by [ @pixelkit.evidence.adoptability-pass-clippy-doc/1 ]
+        }
+        check workspace-tests {
+            statement """
+                cargo test --workspace --features liminalkit/test-fonts passes, including the new focus, layout, Scale::rect and App adapter tests.
+                """
+            method command
+            command "cargo test --workspace --features liminalkit/test-fonts"
+            verified_by [ @pixelkit.evidence.adoptability-pass-tests/1 ]
+        }
+    }
+    implements [
+        @pixelkit.decision.device-pixel-rects,
+        @pixelkit.decision.facade-crate-and-app-adapter,
+        @pixelkit.policy.explicit-state-toolkit
+    ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            The Critical and High rows for external adoption, layout and focus, and the coordinate-system finding.
+            """
+    }
+}
+
+record pixelkit.work.explicit-interaction-lifecycles/1 : work {
+    title "Make interaction and host lifecycle transitions explicit"
+    state completed
+    scope [ path "crates/**" ]
+    intent """
+        Implement the interaction-state audit recommendations: modal dropdown input ownership, touch-contact lifecycle safety, pane capture invalidation, presenter recovery and native lifecycle state, gesture and clipboard operation states, KMS scheduling/device reconciliation, and touch-tuning modes. Preserve existing simple enum/Option models.
+        """
+    acceptance {
+        check regressions {
+            statement """
+                Regression tests cover popup input ownership, contact replacement and invalid slots, pane restructuring capture, and presenter resize retry.
+                """
+            method command
+            verified_by [ @pixelkit.evidence.interaction-lifecycle-regressions/1 ]
+        }
+        check state-models {
+            statement """
+                Gesture, clipboard, host resources, KMS pacing/discovery and touch-tuning mode transitions use explicit owned state with shared cancellation paths.
+                """
+            method manual
+            verified_by [ @pixelkit.evidence.interaction-lifecycle-state-review/1 ]
+        }
+        check workspace {
+            statement """
+                Workspace tests, examples, formatting and applicable lint checks pass.
+                """
+            method command
+            verified_by [ @pixelkit.evidence.interaction-lifecycle-regressions/1 ]
+        }
+    }
+}
+
+record pixelkit.work.hardware-validation/1 : work {
+    title "Validate KMS, touch gestures and scroll physics on real Raspberry Pi hardware"
+    state proposed
+    scope [
+        path "crates/liminalkit-kms/**",
+        path "crates/liminalkit-shell/src/gesture.rs",
+        path "crates/liminalkit-shell/src/scroll_physics.rs",
+        path "crates/liminalkit-shell/src/touch_replay.rs"
+    ]
+    intent """
+        Run the KMS host on at least two real panels (the official Pi touch display and an HDMI panel with a USB touch controller): mode set at the native and one non-native mode, all four rotations, two refresh rates, hotplug of the touch device, and a 24-hour soak for the missing-flip deadline. Run touch_tuning on a touchscreen, record sessions with touch_replay, and calibrate the GestureConfig and ScrollConfig defaults from those recordings. Each 'untested on hardware' label in the README and module docs is removed only by an evidence record citing the device, the kernel and the recording. Keep the recordings as regression fixtures.
+        """
+    note """
+        Not started. Blocked on access to the hardware, which is the owner's to arrange.
+        """
+    after [ @pixelkit.work.adoptability-pass ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            Section 3: the gesture and scroll-physics layer and the KMS host need validation on actual displays, rotations, refresh rates and touch controllers.
+            """
+    }
+}
+
+record pixelkit.work.performance-comparison/1 : work {
+    title "Reproducible performance comparison against egui and Freya on the same screen"
+    state proposed
+    scope [ path "benches/**", path "crates/liminalkit/examples/**" ]
+    intent """
+        Turn the reported ~30% memory reduction over Freya in Lege into a reproducible result. Build one operational screen (a table, a form, a scrolling list, a few controls) in liminalkit, egui and Freya in a separate benchmark workspace outside the published crates. Measure resident memory, startup latency, idle CPU (egui can also sleep, so measure rather than claim), p95 frame time under scripted interaction, binary size, and the same at 1080p, 1440p and 4K to find where software rendering's cost overtakes its memory savings. Report numbers with the machine, the resolution and the commit, and commit the harness so the table can be regenerated.
+        """
+    note """
+        Not started. The result is also the honest answer to 'when should I choose this', which the README currently states from reasoning rather than measurement.
+        """
+    after [ @pixelkit.work.adoptability-pass ]
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            Section 5: evidence of performance, not just claims, with the list of measurements and the resolution crossover question.
+            """
+    }
+}
+
+record pixelkit.work.public-docs/1 : work {
+    title "Screenshots, an architecture guide, a tutorial, and crate-level API docs for outside readers"
+    state proposed
+    scope [ path "README.md", path "crates/*/src/lib.rs", path "docs/**" ]
+    intent """
+        Add to the README a screenshot of a real Lege screen and of a kiosk screen on a Pi, and the gallery render. Write docs/ARCHITECTURE.md (the crates, the frame lifecycle, units, focus, the two hosts, the presenter seam) and a short tutorial that grows hello.rs into a form with a table and a dropdown. Give every crate a README and a lib.rs doc that answers what it is for and what it is not, written for someone who has not read the others. Make RUSTDOCFLAGS=-D warnings clean for the whole workspace (two broken links in liminalkit-raster png/ today) and keep it clean in CI.
+        """
+    note """
+        Not started. The README's positioning and quick start were done in the adoptability pass; this is the rest of the documentation row.
+        """
+    after [ @pixelkit.work.adoptability-pass ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            Section 6 and the Medium documentation row: screenshots, published examples, tutorials, crate-level docs, and a contribution path independent of AKR.
+            """
+    }
+}
+
+record pixelkit.work.publish-packaging/1 : work {
+    title "Packaging for a crates.io release, held until the owner decides the toolkit is ready"
+    state proposed
+    scope [ path "Cargo.toml", path "crates/*/Cargo.toml" ]
+    intent """
+        When and if publishing is decided: per-crate README, keywords and categories for the six component crates (the facade has them); cargo publish --dry-run for each in the order raster, text, shell, ui, windowing, kms, liminalkit; check the packaged file lists for test fixtures that should not ship (the Noto fonts behind test-fonts are the obvious one); a CHANGELOG; and a tag. The workspace already carries version requirements on its path dependencies and a description and repository on every crate.
+        """
+    note """
+        Deliberately not started. On 2026-11-03 the owner said the toolkit is not ready for publishing and asked that the review's publishing advice be ignored; this record exists so the remaining steps are known, not so they are taken.
+        """
+    after [ @pixelkit.work.performance-comparison, @pixelkit.work.public-docs ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            Section 4, recorded for completeness; the recommendation to publish was declined by the owner.
+            """
+    }
+}
+
 record pixelkit.work.raster-simd-coverage/1 : work {
     title "Measured exact SIMD coverage in raster kernels"
     state proposed
@@ -13,6 +219,28 @@ record pixelkit.work.raster-simd-coverage/1 : work {
         output and a measured speed benefit. Preserve clipped tails and portable
         behavior on unsupported targets.
         """
+}
+
+record pixelkit.work.text-shaping-fallback/1 : work {
+    title "Font fallback across scripts, bidirectional text, and an optional mature shaper behind a feature"
+    state proposed
+    scope [ path "crates/liminalkit-text/**" ]
+    intent """
+        Keep the dependency-free renderer as the default path and add what a general caller needs: per-run font fallback that walks a FontSet's chains by script and coverage rather than only by missing glyph; Unicode bidirectional reordering for mixed-direction lines; and an optional `shaper-rustybuzz` (or equivalent) feature that routes shaping through a full OpenType engine while liminalkit-text keeps rasterization, caching and wrapping. The feature must be off by default and must not change output for the bundled Latin and Thai fonts when off. Measure the binary-size and startup cost of the feature so an appliance build can refuse it knowingly.
+        """
+    note """
+        Not started. Scope the first slice to fallback and bidi; the external shaper is a separate decision because it is the first non-trivial dependency in a crate that advertises having none.
+        """
+    after [ @pixelkit.work.adoptability-pass ]
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            The High row for text: font fallback, broader Unicode shaping, bidirectional text, and the suggestion of an optional rustybuzz integration.
+            """
+    }
 }
 
 record pixelkit.work.touch-interactions/1 : work {
@@ -46,6 +274,28 @@ record pixelkit.work.touchscreen/1 : work {
         rendering and distinguish host event timing from physical touch latency.
         """
     verified_by [ @pixelkit.evidence.touchscreen-tests/1 ]
+}
+
+record pixelkit.work.ui-capabilities/1 : work {
+    title "Dialogs, menus, overlays, drag-and-drop and multi-line text, as caller-owned state"
+    state proposed
+    scope [ path "crates/liminalkit-ui/**" ]
+    intent """
+        Add the capabilities an operational application reaches for next, each in the shape Dropdown already has: a value the screen owns, an input prepass that claims clicks and keys before the background draws, and a draw call that runs last. A modal dialog (scrim, focus trapped inside, Escape and a result enum); a context menu and a menu bar sharing the popup machinery; a generic overlay/popover anchored to a rect; in-app drag-and-drop between lists with a caller-owned DragState (OS file drops already arrive through on_file_drop); a multi-line text field with wrapping, vertical scrolling and the same grapheme-boundary editing as the single-line one. Every one of these must state in its signature what it owns and what persists between frames.
+        """
+    note """
+        Not started. Ordered after the layout, focus and adapter work on purpose: the review's advice is to make the architecture easy to adopt before expanding the widget set.
+        """
+    after [ @pixelkit.work.adoptability-pass ]
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            The Medium row for UI capabilities: dialogs, menus, overlays, drag-and-drop, richer text input.
+            """
+    }
 }
 
 record pixelkit.work.windowing-crate/1 : work {

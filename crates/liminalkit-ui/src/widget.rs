@@ -19,8 +19,28 @@
 //! class at all, survives reordering, and makes every widget testable without
 //! drawing anything: build the state, feed it input, assert on the state.
 //!
-//! It works because this is six screens somebody controls, not a framework for
-//! callers who have not been written yet.
+//! This started as the shape of six screens one team controlled. It holds up
+//! for callers who have not been written yet because the toolkit asks nothing
+//! of them it cannot check: every piece of state a control needs is a
+//! parameter, so there is no hidden registry to fall out of step with the
+//! screen. The one place a position used to stand in for a name, keyboard
+//! focus, now accepts a caller-supplied key as well
+//! ([`Focus`](crate::Focus)). The rule for anything added here is the same:
+//! a control may be convenient, but its ownership, its allocations and any
+//! state it keeps between frames must be visible in its signature.
+//!
+//! # Units
+//!
+//! Every `Rect` a widget takes is in device pixels, the same pixels the
+//! [`Painter`] writes and the cursor reports, so hit-testing compares what
+//! was drawn with where the pointer is and nothing is converted back. Layout
+//! is written in logical pixels and converted once, at the call site:
+//! [`Ui::px`] for a length, [`Ui::rect`] for a rectangle, or
+//! [`Scale::rect`](liminalkit_shell::Scale::rect) over a whole logical
+//! layout. [`Theme`]'s sizes (`padding`, `row_height`, `corner_radius`,
+//! `border_width`, `focus_width`) are logical and the widgets scale them
+//! themselves; its two font styles are the exception, converted once by
+//! [`Ui::new`] so measuring and drawing share one key into the text cache.
 //!
 //! # What is worth testing
 //!
@@ -106,7 +126,10 @@ pub struct Ui<'a> {
     pub painter: Painter<'a>,
     pub text: &'a mut TextCache,
     pub input: &'a mut Input,
-    /// Effective theme: font styles are device pixels; dimensional tokens remain logical.
+    /// Effective theme: font styles are device pixels; dimensional tokens
+    /// (`padding`, `row_height`, `corner_radius`, `border_width`,
+    /// `focus_width`) remain logical, and widgets pass them through
+    /// [`Ui::px`] when they use them.
     pub theme: Theme,
     /// Logical→physical; widgets that take logical sizes go through it.
     pub scale: Scale,
@@ -197,16 +220,35 @@ impl<'a> Ui<'a> {
         self.scale.px(logical)
     }
 
+    /// A rectangle written in logical pixels, converted to the device pixels
+    /// every widget takes. `ui.rect(16, 16, 220, 26)` is
+    /// `Rect::new(ui.px(16), ui.px(16), ui.px(220), ui.px(26))` with the
+    /// edges rounded so neighbouring rectangles keep touching.
+    #[inline]
+    pub fn rect(&self, x: i32, y: i32, w: i32, h: i32) -> Rect {
+        self.scale.rect(Rect::new(x, y, w, h))
+    }
+
+    /// Scaled copies of the theme's logical sizes, for a screen that lays
+    /// out around them: `(padding, row_height)` in device pixels.
+    #[inline]
+    pub fn metrics(&self) -> (i32, i32) {
+        (
+            self.px(self.theme.padding),
+            self.px(self.theme.row_height).max(1),
+        )
+    }
+
     /// A rounded surface, returning the area inside its content padding.
     pub fn surface(&mut self, area: Rect, fill: u32, edge: u32) -> Rect {
         self.painter.rounded_rect(
             area,
-            self.theme.corner_radius,
-            self.theme.border_width,
+            self.px(self.theme.corner_radius),
+            self.px(self.theme.border_width),
             fill,
             edge,
         );
-        area.inset(self.theme.padding)
+        area.inset(self.px(self.theme.padding))
     }
 
     /// A panel with a border, returning the area inside it.
@@ -273,11 +315,11 @@ impl<'a> Ui<'a> {
         };
         self.painter.rounded_rect(
             area,
-            self.theme.corner_radius,
+            self.px(self.theme.corner_radius),
             if focused {
                 self.px(self.theme.focus_width)
             } else {
-                self.theme.border_width
+                self.px(self.theme.border_width)
             },
             fill,
             if focused {
@@ -320,9 +362,9 @@ impl<'a> Ui<'a> {
                 self.theme.panel
             };
             self.painter.rounded_rect(
-                tab.inset(2),
-                self.theme.corner_radius,
-                self.theme.border_width,
+                tab.inset(self.px(2)),
+                self.px(self.theme.corner_radius),
+                self.px(self.theme.border_width),
                 fill,
                 self.theme.panel_edge,
             );
@@ -360,21 +402,21 @@ impl<'a> Ui<'a> {
 
     /// A compact status label with a quiet tinted surface.
     pub fn badge(&mut self, area: Rect, label: &str, text: u32, fill: u32, edge: u32) {
-        let badge = area.inset(4);
+        let badge = area.inset(self.px(4));
         self.painter.rounded_rect(
             badge,
-            (self.theme.corner_radius - 1).max(0),
-            self.theme.border_width,
+            self.px((self.theme.corner_radius - 1).max(0)),
+            self.px(self.theme.border_width),
             fill,
             edge,
         );
-        self.label(badge.inset(4), label, text, Align::Centre);
+        self.label(badge.inset(self.px(4)), label, text, Align::Centre);
     }
 
     /// A labelled progress meter. The track and label are drawn without an
     /// off-screen layer; callers can put exact quantities in `label`.
     pub fn meter(&mut self, area: Rect, fraction: f64, label: &str, colour: u32) {
-        let meter = area.inset(5);
+        let meter = area.inset(self.px(5));
         self.bar(meter, fraction, colour);
         self.label(area, label, self.theme.text, Align::Centre);
     }
@@ -716,21 +758,24 @@ impl<'a> Ui<'a> {
         mut row: impl FnMut(usize) -> Row<'k>,
     ) -> TableOutcome {
         let theme = self.theme;
-        let content_width = (area.w - TABLE_GUTTER).max(0);
-        let widths = column_widths(columns, content_width, COLUMN_GAP);
-        let (header, body) = area.split_top(theme.row_height);
+        let row_height = self.px(theme.row_height).max(1);
+        let column_gap = self.px(COLUMN_GAP);
+        let gutter = self.px(TABLE_GUTTER);
+        let content_width = (area.w - gutter).max(0);
+        let widths = column_widths(columns, content_width, column_gap);
+        let (header, body) = area.split_top(row_height);
 
         // Header
         let mut x = area.x;
         for (column, width) in columns.iter().zip(&widths) {
             let cell = Rect::new(x, header.y, *width, header.h);
             self.label(cell, &column.title, theme.text_dim, column.align);
-            x += width + COLUMN_GAP;
+            x += width + column_gap;
         }
         self.painter
             .horizontal_rule(area.x, header.bottom() - 1, area.w, theme.panel_edge);
 
-        let content = row_count as i32 * theme.row_height;
+        let content = row_count as i32 * row_height;
         // Before anything is drawn: the list may have shrunk since last frame,
         // and a table scrolled past its own end shows nothing at all.
         state.scroll.clamp_to(body.h, content);
@@ -745,12 +790,12 @@ impl<'a> Ui<'a> {
         }
 
         let offset = state.scroll.offset();
-        let first = (offset / theme.row_height).max(0) as usize;
-        let last = (((offset + body.h) / theme.row_height) as usize + 1).min(row_count);
+        let first = (offset / row_height).max(0) as usize;
+        let last = (((offset + body.h) / row_height) as usize + 1).min(row_count);
 
         let mut outcome = TableOutcome {
             activated: None,
-            visible_rows: body.h / theme.row_height,
+            visible_rows: body.h / row_height,
         };
 
         self.painter.push_clip(body);
@@ -758,8 +803,8 @@ impl<'a> Ui<'a> {
         // Indexed rather than iterated: the row closure is called by index,
         // and the range is the visible window rather than the whole slice.
         for index in first..last {
-            let top = body.y + index as i32 * theme.row_height - offset;
-            let line = Rect::new(body.x, top, body.w, theme.row_height);
+            let top = body.y + index as i32 * row_height - offset;
+            let line = Rect::new(body.x, top, body.w, row_height);
             if !self.painter.is_visible(line) {
                 continue;
             }
@@ -782,7 +827,7 @@ impl<'a> Ui<'a> {
             let drawn = row(index);
             let mut x = body.x;
             for ((column, width), cell) in columns.iter().zip(&widths).zip(drawn.cells.iter()) {
-                let bounds = Rect::new(x, top, *width, theme.row_height);
+                let bounds = Rect::new(x, top, *width, row_height);
                 let colour = cell.colour.unwrap_or(theme.text);
                 match cell.appearance {
                     CellAppearance::Text => {
@@ -795,7 +840,7 @@ impl<'a> Ui<'a> {
                         self.meter(bounds, fraction, &cell.text, fill);
                     }
                 }
-                x += width + COLUMN_GAP;
+                x += width + column_gap;
             }
 
             if self.input.take_click(hit) {
@@ -809,7 +854,12 @@ impl<'a> Ui<'a> {
         // A scrollbar, only when there is somewhere to scroll to.
         let max = ScrollState::max_offset(body.h, content);
         if max > 0 {
-            let track = Rect::new(body.right() - TABLE_GUTTER + 3, body.y, 4, body.h);
+            let track = Rect::new(
+                body.right() - gutter + self.px(3),
+                body.y,
+                self.px(4).max(1),
+                body.h,
+            );
             self.painter.fill_rect(track, theme.hover);
             let thumb_height = (body.h * body.h / content).max(20);
             let travel = body.h - thumb_height;
@@ -1090,6 +1140,13 @@ pub struct TextFieldState {
     mask_dirty: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum ClipboardEditOperation {
+    Copy,
+    Cut,
+    Paste,
+}
+
 #[derive(Debug)]
 struct ClipboardEdit {
     task: liminalkit_shell::clipboard::ClipboardTask,
@@ -1097,8 +1154,7 @@ struct ClipboardEdit {
     sensitive: bool,
     caret: usize,
     selection: Option<usize>,
-    paste: bool,
-    cut: bool,
+    operation: ClipboardEditOperation,
     interaction_epoch: u64,
 }
 
@@ -1252,8 +1308,11 @@ impl TextFieldState {
                                 sensitive: self.sensitive,
                                 interaction_epoch,
                                 selection: self.selection_anchor,
-                                paste: character == 'v',
-                                cut: character == 'x',
+                                operation: match character {
+                                    'v' => ClipboardEditOperation::Paste,
+                                    'x' => ClipboardEditOperation::Cut,
+                                    _ => ClipboardEditOperation::Copy,
+                                },
                             }));
                         }
                         Err(error) => self.clipboard_error = Some(error.to_string()),
@@ -1299,7 +1358,7 @@ impl TextFieldState {
                     && edit.caret == self.caret
                     && edit.selection == self.selection_anchor =>
             {
-                if edit.paste {
+                if matches!(edit.operation, ClipboardEditOperation::Paste) {
                     if let Some(mut text) = text {
                         self.insert_str(&text);
                         if self.sensitive {
@@ -1307,7 +1366,7 @@ impl TextFieldState {
                         }
                         return true;
                     }
-                } else if edit.cut {
+                } else if matches!(edit.operation, ClipboardEditOperation::Cut) {
                     return self.delete_selection();
                 }
                 false
@@ -1734,11 +1793,11 @@ impl Ui<'_> {
         let theme = self.theme;
         self.painter.rounded_rect(
             area,
-            theme.corner_radius,
+            self.px(theme.corner_radius),
             if focused {
                 self.px(theme.focus_width)
             } else {
-                theme.border_width
+                self.px(theme.border_width)
             },
             theme.background,
             if focused {
@@ -1748,7 +1807,7 @@ impl Ui<'_> {
             },
         );
 
-        let inner = area.inset(theme.padding / 2);
+        let inner = area.inset(self.px(theme.padding / 2));
         if masked {
             state.refresh_mask();
         }
@@ -2226,7 +2285,7 @@ mod masked_text_field_tests {
             let caret = field.caret_area().expect("focused text caret");
             assert_eq!(
                 caret.x,
-                area.inset(theme.padding / 2).x + text.measure("Density", expected)
+                area.inset(scale.px(theme.padding / 2)).x + text.measure("Density", expected)
             );
             assert_eq!(caret.h, text.line_height(expected));
             let bright_rows: Vec<_> = buffer

@@ -1,6 +1,18 @@
 akr 0.1
 project pixelkit
 
+record pixelkit.papercut.a-standalone-audit-harness-importing-the-kms/1 : papercut {
+    title "A standalone audit harness importing the KMS rotation source failed to…"
+    state verified
+    statement """
+        A standalone audit harness importing the KMS rotation source failed to compile until bytemuck was passed explicitly via --extern. Linking the application libraries does not make all direct source-module dependencies available to a standalone rustc invocation.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    about "rustc"
+    author "Codex"
+    created_at 2026-11-01
+}
+
 record pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 : papercut {
     title "akr explain acceptance does not describe the optional acceptance slot;…"
     state verified
@@ -12,6 +24,29 @@ record pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 : paperc
     created_at 2026-10-15
 }
 
+record pixelkit.papercut.building-docs-with-rustdocflags-d-warnings/1 : papercut {
+    title "Building docs with RUSTDOCFLAGS=-D warnings fails in liminalkit-raster…"
+    state verified
+    statement """
+        Building docs with RUSTDOCFLAGS=-D warnings fails in liminalkit-raster before any other crate is documented: png/decode.rs links a private MAX_DIMENSION and png/mod.rs links `write`, which is both a function and a macro. Scope the check to the crates being changed or fix those two links.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    author "claude"
+    created_at 2026-11-03
+}
+
+record pixelkit.papercut.creating-the-interaction-lifecycle-work-record/1 : papercut {
+    title "Creating the interaction-lifecycle work record failed validation…"
+    state verified
+    statement """
+        Creating the interaction-lifecycle work record failed validation because work requires an intent slot; knowledge.propose exposes slots only as an untyped object. Retrying after consulting akr explain work.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    about "akr"
+    author "Codex"
+    created_at 2026-11-01
+}
+
 record pixelkit.papercut.during-a-read-only-follow-up-assessment-akr/1 : papercut {
     title "During a read-only follow-up assessment, akr start returned only an…"
     state verified
@@ -21,6 +56,18 @@ record pixelkit.papercut.during-a-read-only-follow-up-assessment-akr/1 : papercu
     observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
     author "codex"
     created_at 2026-10-15
+}
+
+record pixelkit.papercut.during-an-interaction-state-audit-knowledge/1 : papercut {
+    title "During an interaction-state audit, knowledge.start returned only the…"
+    state verified
+    statement """
+        During an interaction-state audit, knowledge.start returned only the unrelated raster SIMD proposal and recommended it as context. That bundle had no in-scope guidance; an explicit no-relevant-plan result would avoid treating the sole candidate as meaningful.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    about "akr"
+    author "Codex"
+    created_at 2026-11-01
 }
 
 record pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 : papercut {
@@ -43,6 +90,30 @@ record pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 : pape
     observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
     author "codex"
     created_at 2026-10-09
+}
+
+record pixelkit.papercut.strict-workspace-clippy-fails-on-eight-existing/1 : papercut {
+    title "Strict workspace Clippy fails on eight existing warnings (clipboard…"
+    state verified
+    statement """
+        Strict workspace Clippy fails on eight existing warnings (clipboard default/return, raster contains test, palette default, toast borrows, a windows lint typo, and host incoming type complexity). Non-strict all-feature/all-target Clippy completes successfully; no warning points to newly introduced code.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    about "cargo clippy"
+    author "Codex"
+    created_at 2026-11-01
+}
+
+record pixelkit.papercut.the-all-features-all-targets-test-build/1 : papercut {
+    title "The all-features/all-targets test build exhausted the workspace…"
+    state verified
+    statement """
+        The all-features/all-targets test build exhausted the workspace filesystem while linking accessibility-enabled binaries and writing incremental caches. Targeted default-feature tests passed earlier; verification needs regenerable build artifacts cleaned and incremental compilation disabled.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    about "cargo"
+    author "Codex"
+    created_at 2026-11-01
 }
 
 record pixelkit.papercut.the-experimental-tuning-example-initially-used/1 : papercut {
@@ -76,4 +147,15 @@ record pixelkit.papercut.the-new-touch-example-initially-passed-run-app/1 : pape
     observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
     author "codex"
     created_at 2026-10-15
+}
+
+record pixelkit.papercut.the-readme-said-the-gallery-example-writes/1 : papercut {
+    title "The README said the gallery example writes target/gallery.png; it…"
+    state verified
+    statement """
+        The README said the gallery example writes target/gallery.png; it actually writes target/gallery@1x.png (and @2x.png with a scale argument), so a copy step failed. Corrected the README and CONTRIBUTING.
+        """
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    author "claude"
+    created_at 2026-11-03
 }

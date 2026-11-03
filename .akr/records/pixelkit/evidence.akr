@@ -1,6 +1,30 @@
 akr 0.1
 project pixelkit
 
+record pixelkit.evidence.adoptability-pass-clippy-doc/1 : evidence {
+    title "Clippy and rustdoc clean for the changed crates"
+    state verified
+    result pass
+    method command
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    command "cargo clippy --workspace --all-targets --features liminalkit/test-fonts; RUSTDOCFLAGS=\"-D warnings\" cargo doc -p liminalkit -p liminalkit-ui -p liminalkit-shell --no-deps --features liminalkit/test-fonts"
+    summary """
+        Clippy reports eight warnings, all pre-existing in files not touched by this pass (clipboard.rs, painter.rs, windows.rs, host.rs, palette.rs, toast.rs lines unrelated to the edits) and none in the new or changed code. rustdoc with warnings denied is clean for liminalkit, liminalkit-ui and liminalkit-shell; liminalkit-raster has two pre-existing broken intra-doc links in png/.
+        """
+}
+
+record pixelkit.evidence.adoptability-pass-tests/1 : evidence {
+    title "Workspace tests pass after the adoptability pass"
+    state verified
+    result pass
+    method command
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    command "cargo test --workspace --features liminalkit/test-fonts"
+    summary """
+        520 tests passed, 0 failed, across all seven crates including the new liminalkit facade (3 adapter tests), typed-focus and stack-layout tests in liminalkit-ui, and the Scale::rect test in liminalkit-shell; cargo fmt --all --check clean.
+        """
+}
+
 record pixelkit.evidence.coverage-simd-profile/1 : evidence {
     title "On this aarch64 Mac, median ns/row scalar versus dispatched path were 0.78/1.00 at 8 bytes, 1.50/1.75 at 32, 4.51/4.49 at 256, and 50.45/49.24 at 4096. Only the 4096-byte row selects explicit SIMD; its small gain needs confirmation on other machines."
     state verified
@@ -22,6 +46,68 @@ record pixelkit.evidence.coverage-simd-tests/1 : evidence {
     command "cargo test -p pixelkit-raster --offline --quiet"
     summary """
         116 raster tests passed after the u8x32 merge and the 1024-byte dispatch threshold, including clipped spans and boundary lengths.
+        """
+}
+
+record pixelkit.evidence.gallery-renders-at-2x/1 : evidence {
+    title "Gallery proportions hold at 2x scale"
+    state verified
+    result pass
+    method observation
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    command "cargo run -p liminalkit-ui --example gallery --features test-fonts -- 2.0"
+    summary """
+        target/gallery@2x.png (1440x1040) was inspected next to target/gallery@1x.png (720x520): panels, borders, corner radii, list rows and the tooltip keep the same proportions at both scales after theme tokens are scaled at their use sites.
+        """
+}
+
+record pixelkit.evidence.interaction-lifecycle-clippy/1 : evidence {
+    title "Workspace all-feature/all-target Clippy completed successfully; eight existing warnings remain in unchanged code. Strict -D warnings therefore does not pass."
+    state verified
+    result pass
+    method command
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    command "CARGO_TARGET_DIR=/tmp/liminalkit-state-checks CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo clippy --workspace --all-features --all-targets --offline"
+    summary """
+        Workspace all-feature/all-target Clippy completed successfully; eight existing warnings remain in unchanged code. Strict -D warnings therefore does not pass.
+        Capture ".agent/scratch/interaction-lifecycle-clippy.log": 10889 bytes; sha256:867577c664272bd49c6de4f700424b8704540af6a375aef29505f600c8e5a698 (identity only; raw capture is not a retained artifact).
+        """
+}
+
+record pixelkit.evidence.interaction-lifecycle-doc-tests/1 : evidence {
+    title "Workspace all-feature documentation tests completed successfully; formatting and git diff whitespace checks also passed."
+    state verified
+    result pass
+    method command
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    command "CARGO_TARGET_DIR=/tmp/liminalkit-state-checks CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test --workspace --all-features --doc --offline --quiet"
+    summary """
+        Workspace all-feature documentation tests completed successfully; formatting and git diff whitespace checks also passed.
+        Capture ".agent/scratch/interaction-lifecycle-doc-tests.log": 678 bytes; sha256:88605fcde34d35afd53808b1d5e2253ccbdcbbf80f59515b05e2b9c5226303c7 (identity only; raw capture is not a retained artifact).
+        """
+}
+
+record pixelkit.evidence.interaction-lifecycle-regressions/1 : evidence {
+    title "On the uncommitted working tree, 506 unit, integration and example tests passed with zero failures, including modal popup routing, touch identity/invalid-slot handling, capture mutation, resize retry, gesture handoff, KMS completion/discovery, and tuning-mode regressions."
+    state verified
+    result pass
+    method command
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    command "CARGO_TARGET_DIR=/tmp/liminalkit-state-checks CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test --workspace --all-features --all-targets --offline --quiet"
+    summary """
+        On the uncommitted working tree, 506 unit, integration and example tests passed with zero failures, including modal popup routing, touch identity/invalid-slot handling, capture mutation, resize retry, gesture handoff, KMS completion/discovery, and tuning-mode regressions.
+        Capture ".agent/scratch/interaction-lifecycle-tests.log": 2800 bytes; sha256:99c937083a44f8ad7693d79916e2cd533e8ec0e43c0b60b64f24acde75f00063 (identity only; raw capture is not a retained artifact).
+        """
+}
+
+record pixelkit.evidence.interaction-lifecycle-state-review/1 : evidence {
+    title "Reviewed the working-tree changes: gesture recognition owns Idle/Single/Transform state, clipboard operations are an enum, native resources publish atomically and suspension cancels interactions, KMS pacing owns submitted timings with a watchdog, discovery retains readers by path, and tuning uses transport/source enums with centralized cancellation. Dropdown modal priority uses a documented input prepass. Hardware/interactive touch validation was not performed."
+    state verified
+    result pass
+    method manual
+    observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
+    summary """
+        Reviewed the working-tree changes: gesture recognition owns Idle/Single/Transform state, clipboard operations are an enum, native resources publish atomically and suspension cancels interactions, KMS pacing owns submitted timings with a watchdog, discovery retains readers by path, and tuning uses transport/source enums with centralized cancellation. Dropdown modal priority uses a documented input prepass. Hardware/interactive touch validation was not performed.
         """
 }
 

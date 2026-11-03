@@ -1,16 +1,16 @@
-//! EXPERIMENTAL / UNTESTED: original touch-feel playground. Compile checking is
-//! not behavioral validation. No real touchscreen or interactive run validated.
+//! EXPERIMENTAL: headless tests cover interaction transitions; no real
+//! touchscreen or interactive touch-feel validation has been performed.
 //! R records a fresh list interaction; R stops; P replays with current tuning.
 //! Mouse drag simulates one contact. Native touch and simulated mouse are kept
 //! separate: after native touch is seen, mouse simulation is disabled.
-use liminalkit_raster::{Painter, RasterKernel, Rect, WindowBuffer};
-use liminalkit_shell::gesture::{DragAxis, Gesture, GestureConfig, GestureRecognizer};
-use liminalkit_shell::scroll_physics::{Boundary, ScrollAxis, ScrollConfig};
-use liminalkit_shell::touch_replay::{ReplayCursor, TouchRecording};
-use liminalkit_shell::{Input, KeyInput, MouseButton, Scale, TouchEvent, TouchId, TouchPhase};
-use liminalkit_text::{font::test_fonts::set, Align, TextCache};
-use liminalkit_ui::{Theme, Ui};
-use liminalkit_windowing::{run_app, PixelApp, WindowConfig};
+use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
+use liminalkit::shell::gesture::{DragAxis, Gesture, GestureConfig, GestureRecognizer};
+use liminalkit::shell::scroll_physics::{Boundary, ScrollAxis, ScrollConfig};
+use liminalkit::shell::touch_replay::{ReplayCursor, TouchRecording};
+use liminalkit::shell::{Input, KeyInput, MouseButton, Scale, TouchEvent, TouchId, TouchPhase};
+use liminalkit::text::{font::test_fonts::set, Align, TextCache};
+use liminalkit::ui::{Theme, Ui};
+use liminalkit::windowing::{run_app, PixelApp, WindowConfig};
 use std::time::{Duration, Instant};
 
 const TOP: f64 = 100.0;
@@ -121,13 +121,13 @@ impl Surface {
                     self.scroll.jump_to(offset);
                     self.scroll.catch();
                 }
+                Gesture::TransformStarted => {
+                    self.pressed = None;
+                    self.scroll.catch();
+                }
                 Gesture::Cancelled => {
                     self.pressed = None;
-                    if self.gestures.active() {
-                        self.scroll.catch();
-                    } else {
-                        self.scroll.cancel();
-                    }
+                    self.scroll.cancel();
                 }
                 Gesture::Released => {
                     self.pressed = None;
@@ -147,6 +147,20 @@ enum Target {
     List,
     Button(usize),
 }
+enum Transport {
+    Idle,
+    Recording,
+    Replaying {
+        epoch: Instant,
+        cursor: ReplayCursor,
+    },
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PointerSource {
+    MouseIdle,
+    MouseDown,
+    Native,
+}
 struct Demo {
     surface: Surface,
     controls: GestureRecognizer,
@@ -158,32 +172,64 @@ struct Demo {
     input: Input,
     scale: Scale,
     recording: TouchRecording,
-    recording_on: bool,
-    replay: Option<(Instant, ReplayCursor)>,
+    transport: Transport,
     status: String,
     graph: Vec<(f64, f64)>,
     mouse: (f64, f64),
-    mouse_down: bool,
-    native_seen: bool,
+    pointer_source: PointerSource,
 }
 impl Demo {
-    fn reset(&mut self, time: Instant) {
-        self.surface = Surface::new(self.config, self.gesture_config, time);
+    fn new() -> Self {
+        let config = ScrollConfig::default();
+        let gesture_config = GestureConfig {
+            axis: DragAxis::Vertical,
+            ..GestureConfig::default()
+        };
+        Demo {
+            surface: Surface::new(config, gesture_config, Instant::now()),
+            controls: GestureRecognizer::new(GestureConfig::default()).unwrap(),
+            target: None,
+            config,
+            gesture_config,
+            text: TextCache::new(set()),
+            kernel: RasterKernel::new(),
+            input: Input::new(),
+            scale: Scale::ONE,
+            recording: TouchRecording::new(4096),
+            transport: Transport::Idle,
+            status: "R starts a fresh recording; P replays".into(),
+            graph: Vec::new(),
+            mouse: (0.0, 0.0),
+            pointer_source: PointerSource::MouseIdle,
+        }
+    }
+
+    fn cancel_capture(&mut self) {
+        self.surface.cancel();
         self.controls.cancel();
         self.target = None;
+        if self.pointer_source == PointerSource::MouseDown {
+            self.pointer_source = PointerSource::MouseIdle;
+        }
+    }
+    fn cancel_interaction(&mut self) {
+        self.cancel_capture();
+        self.transport = Transport::Idle;
+    }
+    fn reset(&mut self, time: Instant) {
+        self.cancel_interaction();
+        self.surface = Surface::new(self.config, self.gesture_config, time);
         self.graph.clear();
     }
     fn action(&mut self, index: usize) {
         if index == 0 {
-            if self.recording_on {
-                self.recording_on = false;
-                self.surface.cancel();
+            if matches!(self.transport, Transport::Recording) {
+                self.cancel_interaction();
                 self.status = "Recording stopped; P replays from the fixed starting state".into();
             } else {
-                self.replay = None;
                 self.recording.clear();
                 self.reset(Instant::now());
-                self.recording_on = true;
+                self.transport = Transport::Recording;
                 self.status = "RECORDING list input (max 4096 reports); R stops".into();
             }
             return;
@@ -193,10 +239,12 @@ impl Demo {
                 self.status = "Replay refused: record a nonempty, non-truncated trace".into();
                 return;
             }
-            self.recording_on = false;
             let now = Instant::now();
             self.reset(now);
-            self.replay = Some((now, ReplayCursor::default()));
+            self.transport = Transport::Replaying {
+                epoch: now,
+                cursor: ReplayCursor::default(),
+            };
             self.status = "REPLAY with current tuning; live list input interrupts".into();
             return;
         }
@@ -233,8 +281,6 @@ impl Demo {
             _ => return,
         }
         self.gesture_config.max_velocity = self.config.max_fling_velocity;
-        self.replay = None;
-        self.recording_on = false;
         self.reset(Instant::now());
         self.status = "Tuning changed; P compares the same recorded input".into();
     }
@@ -251,12 +297,13 @@ impl Demo {
         }
         match self.target {
             Some(Target::List) => {
-                if self.replay.take().is_some() {
+                if matches!(self.transport, Transport::Replaying { .. }) {
+                    self.transport = Transport::Idle;
                     self.surface.cancel();
                     self.status = "Replay interrupted".into();
                 }
-                if self.recording_on && !self.recording.record(event) {
-                    self.recording_on = false;
+                if matches!(self.transport, Transport::Recording) && !self.recording.record(event) {
+                    self.transport = Transport::Idle;
                     self.status =
                         "Trace full or invalid; stopped. Truncated traces cannot replay".into();
                 }
@@ -283,7 +330,7 @@ impl Demo {
         }
     }
     fn pump(&mut self, now: Instant) {
-        if let Some((epoch, cursor)) = &mut self.replay {
+        if let Transport::Replaying { epoch, cursor } = &mut self.transport {
             let elapsed = now.saturating_duration_since(*epoch);
             for recorded in cursor.due(&self.recording, elapsed) {
                 if let Some(event) = recorded.event(*epoch) {
@@ -295,7 +342,7 @@ impl Demo {
                 self.surface.cancel();
             }
             if elapsed > self.recording.duration() + Duration::from_secs(4) {
-                self.replay = None;
+                self.transport = Transport::Idle;
                 self.status = "Replay finished; P repeats with current tuning".into();
             }
         }
@@ -312,12 +359,13 @@ fn button_rect(index: usize) -> Rect {
 }
 impl PixelApp for Demo {
     fn on_touch(&mut self, event: &TouchEvent) {
-        if !self.native_seen {
-            self.native_seen = true;
-            self.mouse_down = false;
-            self.target = None;
-            self.surface.cancel();
-            self.controls.cancel();
+        if self.pointer_source != PointerSource::Native {
+            if self.pointer_source == PointerSource::MouseDown {
+                self.cancel_interaction();
+            } else {
+                self.cancel_capture();
+            }
+            self.pointer_source = PointerSource::Native;
         }
         let mut event = *event;
         event.position.0 /= self.scale.0 as f64;
@@ -329,15 +377,19 @@ impl PixelApp for Demo {
             x as f64 / self.scale.0 as f64,
             y as f64 / self.scale.0 as f64,
         );
-        if self.mouse_down && !self.native_seen {
+        if self.pointer_source == PointerSource::MouseDown {
             self.route(mouse_event(self.mouse, TouchPhase::Moved));
         }
     }
     fn on_mouse(&mut self, button: MouseButton, pressed: bool) {
-        if button != MouseButton::Left || self.native_seen {
+        if button != MouseButton::Left || self.pointer_source == PointerSource::Native {
             return;
         }
-        self.mouse_down = pressed;
+        self.pointer_source = if pressed {
+            PointerSource::MouseDown
+        } else {
+            PointerSource::MouseIdle
+        };
         self.route(mouse_event(
             self.mouse,
             if pressed {
@@ -348,9 +400,9 @@ impl PixelApp for Demo {
         ));
     }
     fn on_cursor_left(&mut self) {
-        if self.mouse_down {
+        if self.pointer_source == PointerSource::MouseDown {
             self.route(mouse_event(self.mouse, TouchPhase::Cancelled));
-            self.mouse_down = false;
+            self.pointer_source = PointerSource::MouseIdle;
         }
     }
     fn on_key(&mut self, key: &KeyInput) {
@@ -377,20 +429,17 @@ impl PixelApp for Demo {
         }
     }
     fn on_layout_changed(&mut self) {
-        self.surface.cancel();
-        self.controls.cancel();
-        self.target = None;
-        self.replay = None;
-        self.recording_on = false;
-        self.mouse_down = false;
+        self.cancel_interaction();
         self.status = "Surface changed: gestures cancelled; recording stopped".into();
     }
     fn on_scale(&mut self, scale: Scale) {
         self.scale = scale;
     }
     fn animation_interval(&self) -> Option<Duration> {
-        (self.surface.scroll.animating() || self.surface.gestures.active() || self.replay.is_some())
-            .then_some(Duration::from_millis(8))
+        (self.surface.scroll.animating()
+            || self.surface.gestures.active()
+            || matches!(self.transport, Transport::Replaying { .. }))
+        .then_some(Duration::from_millis(8))
     }
     fn tick(&mut self) {
         self.pump(Instant::now());
@@ -540,35 +589,70 @@ fn mouse_event(position: (f64, f64), phase: TouchPhase) -> TouchEvent {
     }
 }
 fn main() {
-    eprintln!(
-        "EXPERIMENTAL / UNTESTED: no behavioral, hardware or touch-feel validation performed."
-    );
-    let config = ScrollConfig::default();
-    let gesture_config = GestureConfig {
-        axis: DragAxis::Vertical,
-        ..GestureConfig::default()
-    };
+    eprintln!("EXPERIMENTAL: headless state tests only; hardware and touch feel unvalidated.");
     run_app(
-        Demo {
-            surface: Surface::new(config, gesture_config, Instant::now()),
-            controls: GestureRecognizer::new(GestureConfig::default()).unwrap(),
-            target: None,
-            config,
-            gesture_config,
-            text: TextCache::new(set()),
-            kernel: RasterKernel::new(),
-            input: Input::new(),
-            scale: Scale::ONE,
-            recording: TouchRecording::new(4096),
-            recording_on: false,
-            replay: None,
-            status: "R starts a fresh recording; P replays".into(),
-            graph: Vec::new(),
-            mouse: (0.0, 0.0),
-            mouse_down: false,
-            native_seen: false,
-        },
-        WindowConfig::new("UNTESTED - liminalkit touch tuning", 980.0, 800.0).min_size(980.0, 800.0),
+        Demo::new(),
+        WindowConfig::new("UNTESTED - liminalkit touch tuning", 980.0, 800.0)
+            .min_size(980.0, 800.0),
     )
     .expect("run experimental tuning example");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transport_changes_and_layout_loss_retire_capture() {
+        let mut demo = Demo::new();
+        demo.action(0);
+        assert!(matches!(demo.transport, Transport::Recording));
+        demo.on_cursor(50.0, 150.0);
+        demo.on_mouse(MouseButton::Left, true);
+        assert!(demo.surface.gestures.active());
+        demo.action(0);
+        assert!(matches!(demo.transport, Transport::Idle));
+        assert!(demo.target.is_none());
+        assert!(!demo.surface.gestures.active());
+        assert_eq!(demo.pointer_source, PointerSource::MouseIdle);
+        demo.action(1);
+        assert!(matches!(demo.transport, Transport::Replaying { .. }));
+        demo.on_layout_changed();
+        assert!(matches!(demo.transport, Transport::Idle));
+        assert!(!demo.surface.gestures.active());
+    }
+
+    #[test]
+    fn native_source_switch_cancels_an_active_mouse_recording() {
+        let mut demo = Demo::new();
+        demo.action(0);
+        demo.on_cursor(50.0, 150.0);
+        demo.on_mouse(MouseButton::Left, true);
+        let native = TouchEvent {
+            id: TouchId {
+                device: 1,
+                contact: 1,
+            },
+            phase: TouchPhase::Started,
+            position: (60.0, 150.0),
+            pressure: None,
+            received_at: Instant::now(),
+        };
+        demo.on_touch(&native);
+        assert_eq!(demo.pointer_source, PointerSource::Native);
+        assert!(matches!(demo.transport, Transport::Idle));
+        assert!(demo.surface.gestures.active());
+        demo.on_mouse(MouseButton::Left, false);
+        assert!(
+            demo.surface.gestures.active(),
+            "mouse release cannot end native capture"
+        );
+        demo.on_touch(&TouchEvent {
+            phase: TouchPhase::Ended,
+            received_at: Instant::now(),
+            ..native
+        });
+        assert!(!demo.surface.gestures.active());
+        assert!(demo.target.is_none());
+    }
 }

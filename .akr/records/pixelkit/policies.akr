@@ -1,0 +1,23 @@
+akr 0.1
+project pixelkit
+
+record pixelkit.policy.explicit-state-toolkit/1 : policy {
+    title "liminalkit is an explicit-state, software-rendered toolkit; abstractions stay visible and optional"
+    state proposed
+    scope [ all ]
+    topic positioning
+    rule """
+        liminalkit is positioned as a lightweight GUI toolkit for applications that need direct control over drawing, interaction and resource use: desktop utilities, operational interfaces, kiosks and embedded Linux displays. Caller-owned state, immediate-mode controls and software rendering, with no browser, no retained widget tree, no widget identity map and no mandatory GPU stack. Every new subsystem must make its ownership, allocations and any state kept between frames visible in its signature; a hidden mechanism that undermines predictability needs a strong, recorded justification. Layout helpers are stateless functions from a rectangle to rectangles; a retained layout hierarchy is not added without an overwhelming reason. The toolkit does not aim at feature parity with egui, Dioxus or Freya, and does not try to become a universal application framework.
+        """
+    rationale """
+        An outside review (source outside-review-2026-11-03) found the toolkit's identity coherent and different from the mainstream Rust GUI frameworks precisely because state lives in application structs and pixels are produced by a CPU painter. That identity is worth protecting as the toolkit opens to callers that were not written yet: the design holds for unknown applications only as long as nothing the toolkit does is hidden from them.
+        """
+    source {
+        kind external
+        role origin
+        document "outside-review-2026-11-03"
+        use """
+            Adopted the proposed positioning statement and the development rule that new subsystems justify ownership, allocations and implicit state.
+            """
+    }
+}

@@ -1,10 +1,10 @@
 //! Touch diagnostics and a minimal touch-only UI. No hardware-specific driver.
 //! Run with LIMINALKIT_FRAME_LOG=1 to measure host receipt → present return.
-use liminalkit_raster::{Painter, RasterKernel, Rect, WindowBuffer};
-use liminalkit_shell::{Input, Scale, TouchEvent, TouchPhase, TouchPointer, TouchState};
-use liminalkit_text::{font::test_fonts::set, Align, TextCache};
-use liminalkit_ui::{Theme, Ui};
-use liminalkit_windowing::{run_app, PixelApp, WindowConfig};
+use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
+use liminalkit::shell::{Input, Scale, TouchEvent, TouchPhase, TouchPointer, TouchState};
+use liminalkit::text::{font::test_fonts::set, Align, TextCache};
+use liminalkit::ui::{Theme, Ui};
+use liminalkit::windowing::{run_app, PixelApp, WindowConfig};
 
 struct Demo {
     touches: TouchState,
@@ -43,7 +43,6 @@ impl PixelApp for Demo {
     }
 
     fn render(&mut self, buffer: &mut WindowBuffer, scale: Scale) {
-        let width = scale.logical(buffer.width as i32) as i32;
         let mut ui = Ui::new(
             Painter::new(buffer),
             &mut self.text,
@@ -53,20 +52,23 @@ impl PixelApp for Demo {
             &mut self.kernel,
         );
         ui.painter.clear(0xf4f3ef);
+        // Layout in logical pixels; `ui.rect` converts to the device pixels
+        // the controls take.
+        let width = scale.logical(ui.painter.width()) as i32;
         ui.label(
-            Rect::new(24, 20, width - 48, 32),
+            ui.rect(24, 20, width - 48, 32),
             "Touch input diagnostics",
             0x182027,
             Align::Left,
         );
         ui.label(
-            Rect::new(24, 60, width - 48, 32),
+            ui.rect(24, 60, width - 48, 32),
             "Move fingers to pan; use two fingers to pinch.",
             0x182027,
             Align::Left,
         );
         if ui.button(
-            Rect::new(24, 108, 240, 56),
+            ui.rect(24, 108, 240, 56),
             &format!("Press count: {}", self.presses),
         ) {
             self.presses += 1;
@@ -83,19 +85,19 @@ impl PixelApp for Demo {
             )
         };
         ui.label(
-            Rect::new(24, 180, width - 48, 32),
+            ui.rect(24, 180, width - 48, 32),
             &format!("{} contacts | {}", self.touches.contacts().len(), interval),
             0x182027,
             Align::Left,
         );
         ui.label(
-            Rect::new(24, 220, width - 48, 32),
+            ui.rect(24, 220, width - 48, 32),
             "Arrival intervals are not sensor or finger-to-photon latency.",
             0x68727b,
             Align::Left,
         );
         ui.label(
-            Rect::new(24, 260, width - 48, 32),
+            ui.rect(24, 260, width - 48, 32),
             &format!(
                 "Pan {:.0}, {:.0} physical px | zoom {:.2}x",
                 self.pan.0, self.pan.1, self.zoom

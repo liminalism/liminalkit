@@ -51,25 +51,87 @@
 
 use liminalkit_shell::{KeyInput, Modifiers};
 
-/// Which registered widget (by draw order) currently holds focus.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Focus {
-    current: Option<usize>,
-    /// The previous frame's total registrations — what movement is resolved
-    /// against, since this frame's total is not known until it is over.
-    count: usize,
+/// Something a screen can name a focusable control by.
+///
+/// The default key is the draw-order index, which is what
+/// [`Focus::register`] hands out. A screen whose controls come and go, or
+/// move, names them with its own enum instead and registers through
+/// [`Focus::register_id`]; focus then follows the name, not the slot.
+pub trait FocusKey: Copy + Eq {}
+
+impl<K: Copy + Eq> FocusKey for K {}
+
+/// Which registered widget currently holds focus.
+///
+/// `K` is how a screen names its controls. With the default `usize` the
+/// name is the draw-order index and [`register`](Focus::register) assigns
+/// it. With a caller-supplied type, an application enum such as
+/// `enum Field { Name, Email, Save }`, the screen passes the name to
+/// [`register_id`](Focus::register_id), and focus stays with the named
+/// control when a conditional control appears before it or the form is
+/// reordered.
+///
+/// Both forms keep the same shape: one small value a screen owns, rebuilt
+/// from what actually gets drawn, with no per-widget storage anywhere else.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Focus<K: FocusKey = usize> {
+    current: Option<K>,
+    /// The previous frame's registrations in draw order, what movement is
+    /// resolved against, since this frame's order is not known until it is
+    /// over.
+    order: Vec<K>,
     /// This frame's registrations so far.
-    registered: usize,
+    registering: Vec<K>,
+    /// Where `current` sat in `order` the last time it was seen there, so a
+    /// control that vanishes hands focus to whatever now sits in its slot.
+    last_position: Option<usize>,
 }
 
-impl Focus {
-    pub fn new() -> Focus {
+impl<K: FocusKey> Default for Focus<K> {
+    fn default() -> Focus<K> {
+        Focus {
+            current: None,
+            order: Vec::new(),
+            registering: Vec::new(),
+            last_position: None,
+        }
+    }
+}
+
+impl<K: FocusKey> Focus<K> {
+    pub fn new() -> Focus<K> {
         Focus::default()
     }
 
-    /// The index that currently has focus, if any.
-    pub fn current(&self) -> Option<usize> {
+    /// The key that currently has focus, if any.
+    pub fn current(&self) -> Option<K> {
         self.current
+    }
+
+    /// Whether `key` is the focused control.
+    pub fn is_focused(&self, key: K) -> bool {
+        self.current == Some(key)
+    }
+
+    /// How many controls registered last frame.
+    pub fn count(&self) -> usize {
+        self.resolved().len()
+    }
+
+    /// The order movement resolves against: this frame's registrations once
+    /// they have caught up with last frame's count, otherwise last frame's.
+    /// Mid-frame, last frame's is the best information there is; after the
+    /// last registration, this frame's is exact.
+    fn resolved(&self) -> &[K] {
+        if self.registering.len() >= self.order.len() {
+            &self.registering
+        } else {
+            &self.order
+        }
+    }
+
+    fn position_of(&self, key: K) -> Option<usize> {
+        self.resolved().iter().position(|k| *k == key)
     }
 
     /// Move focus by `delta` registrations from last frame, wrapping at
@@ -78,39 +140,59 @@ impl Focus {
     /// between items calls this directly, or through
     /// [`handle_arrows`](Self::handle_arrows).
     pub fn advance(&mut self, delta: i32) {
-        if self.count == 0 {
+        let order = self.resolved();
+        if order.is_empty() {
             self.current = None;
+            self.last_position = None;
             return;
         }
-        let count = self.count as i32;
-        let next = match self.current {
+        let count = order.len() as i32;
+        let position = self
+            .current
+            .and_then(|key| order.iter().position(|k| *k == key));
+        let next = match position {
             Some(index) => (index as i32 + delta).rem_euclid(count),
             // Matches `TableState::move_by`: arrowing into nothing focused
             // lands at whichever end the direction implies.
             None if delta >= 0 => 0,
             None => count - 1,
-        };
-        self.current = Some(next as usize);
+        } as usize;
+        self.current = Some(order[next]);
+        self.last_position = Some(next);
     }
 
     /// Apply a frame's Tab / Shift-Tab presses, and start counting this
     /// frame's registrations. Call once, before the first
-    /// [`register`](Self::register) of the frame.
+    /// [`register`](Self::register) or [`register_id`](Self::register_id)
+    /// of the frame.
     pub fn handle_tab(&mut self, keys: &[KeyInput], modifiers: Modifiers) {
-        // Pull a stale index back into last frame's own bounds first, so a
-        // field removed since then does not leave focus pointing miles past
-        // the end of a much shorter list — the same clamp `Ui::tabs` applies
-        // to its own selection index.
-        // An explicit set before the first registration must survive this frame.
-        if self.count > 0 {
-            self.current = self.current.map(|index| index.min(self.count - 1));
+        // Close out the previous frame: what it drew is what Tab moves over.
+        if !self.registering.is_empty() || self.order.is_empty() {
+            self.order = std::mem::take(&mut self.registering);
+        } else {
+            self.registering.clear();
+        }
+        // A key that was focused but not drawn last frame hands focus to
+        // whatever now occupies its slot, clamped into the new order, so a
+        // removed field does not leave focus pointing at nothing for good.
+        // An explicit `set` before the first registration must survive this.
+        if let Some(key) = self.current {
+            match self.position_of(key) {
+                Some(index) => self.last_position = Some(index),
+                None => {
+                    if let (Some(position), false) = (self.last_position, self.order.is_empty()) {
+                        let index = position.min(self.order.len() - 1);
+                        self.current = Some(self.order[index]);
+                        self.last_position = Some(index);
+                    }
+                }
+            }
         }
         for key in keys {
             if matches!(key, KeyInput::Tab) {
                 self.advance(if modifiers.shift { -1 } else { 1 });
             }
         }
-        self.registered = 0;
     }
 
     /// Move focus in response to arrow keys, for a screen where the arrows
@@ -131,14 +213,66 @@ impl Focus {
         }
     }
 
-    /// Register one focusable widget for this frame, in draw order, and
+    /// Register the control named `key` for this frame, in draw order, and
     /// report whether it currently has focus. The screen passes the result
     /// straight to whatever `focused: bool` a widget function takes.
+    ///
+    /// Registering the same key twice in a frame is a screen bug, and the
+    /// second registration simply shares the first's focus.
+    pub fn register_id(&mut self, key: K) -> bool {
+        self.registering.push(key);
+        self.current == Some(key)
+    }
+
+    /// [`register_id`](Self::register_id), acquiring focus on a pointer
+    /// press inside `area` or an accessibility focus request, before the
+    /// widget consumes its click.
+    pub fn register_id_at(
+        &mut self,
+        key: K,
+        input: &liminalkit_shell::Input,
+        area: liminalkit_raster::Rect,
+    ) -> bool {
+        if input
+            .press_position()
+            .is_some_and(|(x, y)| area.contains(x, y))
+            || input.focus_requested(area)
+        {
+            self.current = Some(key);
+            self.last_position = Some(self.registering.len());
+        }
+        self.register_id(key)
+    }
+
+    /// Give a specific control focus outright — a click on a field should
+    /// focus it whether or not Tab was ever pressed.
+    pub fn set(&mut self, key: K) {
+        self.current = Some(key);
+        self.last_position = self.position_of(key).or(self.last_position);
+    }
+
+    /// Drop focus entirely — Escape leaving a field, or a dialog closing.
+    pub fn clear(&mut self) {
+        self.current = None;
+        self.last_position = None;
+    }
+
+    /// Forget last frame's order as well as the current focus, for a page
+    /// change where none of the old controls will be drawn again.
+    pub fn reset(&mut self) {
+        *self = Focus::default();
+    }
+}
+
+impl Focus<usize> {
+    /// Register one focusable widget for this frame, in draw order, and
+    /// report whether it currently has focus. The draw-order position is
+    /// the widget's name: the first control registered is `0`, the next
+    /// `1`, and so on. A screen that wants names that survive reordering
+    /// uses [`register_id`](Self::register_id) with its own key type.
     pub fn register(&mut self) -> bool {
-        let index = self.registered;
-        self.registered += 1;
-        self.count = self.registered;
-        self.current == Some(index)
+        let index = self.registering.len();
+        self.register_id(index)
     }
 
     /// Register a control and acquire focus on a pointer press or an
@@ -148,27 +282,8 @@ impl Focus {
         input: &liminalkit_shell::Input,
         area: liminalkit_raster::Rect,
     ) -> bool {
-        if input
-            .press_position()
-            .is_some_and(|(x, y)| area.contains(x, y))
-            || input.focus_requested(area)
-        {
-            self.current = Some(self.registered);
-        }
-        self.register()
-    }
-
-    /// Give a specific registration focus outright — a click on a field
-    /// should focus it whether or not Tab was ever pressed. `index` is
-    /// whatever [`register`](Self::register) returned `true` for, last time
-    /// this widget drew, or simply a position the caller already knows.
-    pub fn set(&mut self, index: usize) {
-        self.current = Some(index);
-    }
-
-    /// Drop focus entirely — Escape leaving a field, or a dialog closing.
-    pub fn clear(&mut self) {
-        self.current = None;
+        let index = self.registering.len();
+        self.register_id_at(index, input, area)
     }
 }
 
@@ -344,9 +459,107 @@ mod tests {
 
     #[test]
     fn with_no_focusable_widgets_at_all_nothing_panics() {
-        let mut focus = Focus::new();
+        let mut focus = Focus::<usize>::new();
         focus.handle_tab(&[KeyInput::Tab], Modifiers::default());
         focus.handle_arrows(&[KeyInput::Down], KeyInput::Down, KeyInput::Up);
         assert_eq!(focus.current(), None);
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Field {
+        Name,
+        Email,
+        Extra,
+        Save,
+    }
+
+    fn typed_frame(focus: &mut Focus<Field>, keys: &[KeyInput], fields: &[Field]) -> Vec<Field> {
+        focus.handle_tab(keys, Modifiers::default());
+        fields
+            .iter()
+            .copied()
+            .filter(|field| focus.register_id(*field))
+            .collect()
+    }
+
+    #[test]
+    fn typed_focus_follows_the_name_when_a_control_appears_before_it() {
+        let mut focus = Focus::<Field>::new();
+        let form = [Field::Name, Field::Email, Field::Save];
+        typed_frame(&mut focus, &[], &form);
+        focus.set(Field::Email);
+        assert_eq!(typed_frame(&mut focus, &[], &form), vec![Field::Email]);
+
+        // A conditional control is inserted ahead of the focused one. A
+        // positional index would now point at Extra; the name still points
+        // at Email.
+        let longer = [Field::Name, Field::Extra, Field::Email, Field::Save];
+        assert_eq!(typed_frame(&mut focus, &[], &longer), vec![Field::Email]);
+        // And Tab moves relative to the new order.
+        assert_eq!(
+            typed_frame(&mut focus, &[KeyInput::Tab], &longer),
+            vec![Field::Save]
+        );
+    }
+
+    #[test]
+    fn typed_focus_survives_a_reorder() {
+        let mut focus = Focus::<Field>::new();
+        typed_frame(&mut focus, &[], &[Field::Name, Field::Email, Field::Save]);
+        focus.set(Field::Save);
+        assert_eq!(
+            typed_frame(&mut focus, &[], &[Field::Save, Field::Name, Field::Email]),
+            vec![Field::Save]
+        );
+        assert_eq!(
+            typed_frame(
+                &mut focus,
+                &[KeyInput::Tab],
+                &[Field::Save, Field::Name, Field::Email]
+            ),
+            vec![Field::Name],
+            "Tab from Save goes to what follows it in the current order"
+        );
+    }
+
+    #[test]
+    fn a_removed_typed_control_hands_focus_to_whatever_took_its_slot() {
+        let mut focus = Focus::<Field>::new();
+        typed_frame(&mut focus, &[], &[Field::Name, Field::Extra, Field::Save]);
+        focus.set(Field::Extra);
+        typed_frame(&mut focus, &[], &[Field::Name, Field::Extra, Field::Save]);
+        // Extra is gone this frame: nothing is focused for one frame...
+        assert!(typed_frame(&mut focus, &[], &[Field::Name, Field::Save]).is_empty());
+        // ...and the slot it occupied is where focus lands next.
+        assert_eq!(
+            typed_frame(&mut focus, &[], &[Field::Name, Field::Save]),
+            vec![Field::Save]
+        );
+    }
+
+    #[test]
+    fn typed_tab_from_nothing_lands_on_the_first_and_shift_tab_on_the_last() {
+        let mut focus = Focus::<Field>::new();
+        let form = [Field::Name, Field::Email];
+        typed_frame(&mut focus, &[], &form);
+        assert_eq!(
+            typed_frame(&mut focus, &[KeyInput::Tab], &form),
+            vec![Field::Name]
+        );
+        focus.clear();
+        focus.handle_tab(&[KeyInput::Tab], shift());
+        assert_eq!(focus.current(), Some(Field::Email));
+    }
+
+    #[test]
+    fn reset_forgets_the_old_order_as_well_as_the_focus() {
+        let mut focus = Focus::<Field>::new();
+        typed_frame(&mut focus, &[], &[Field::Name, Field::Email]);
+        focus.set(Field::Email);
+        focus.reset();
+        assert_eq!(focus.current(), None);
+        assert_eq!(focus.count(), 0);
+        focus.handle_tab(&[KeyInput::Tab], Modifiers::default());
+        assert_eq!(focus.current(), None, "nothing to move over yet");
     }
 }

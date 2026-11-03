@@ -1,0 +1,14 @@
+[
+  {
+    "added_at": "2026-11-03",
+    "availability": "full",
+    "byte_len": 6098,
+    "content_hash": "sha256:aa61e0d5819441fcb738db5eb23cb20f5cd8c0bb8f98ea249b38986cd22195a1",
+    "id": "outside-review-2026-11-03",
+    "media_type": "text/markdown",
+    "observed_at": "19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf",
+    "origin": "external",
+    "path": "sources/external/outside-review-2026-11-03--aa61e0d5.md",
+    "title": "Outside agent review of liminalkit's value, philosophy and public-toolkit potential (2026-11-03)"
+  }
+]

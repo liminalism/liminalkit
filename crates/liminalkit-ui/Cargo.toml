@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Immediate-mode controls with caller-owned state and no widget tree: buttons, tabs, forms, text fields, dropdowns, tables, lists, toasts and stateless layout. The controls of liminalkit."
 
 [dependencies]
 liminalkit-raster = { workspace = true }
@@ -15,7 +17,6 @@ unicode-segmentation = "1.13.3"
 
 [dev-dependencies]
 liminalkit-text = { workspace = true, features = ["test-fonts"] }
-liminalkit-windowing = { workspace = true }
 
 [features]
 test-fonts = ["liminalkit-text/test-fonts"]

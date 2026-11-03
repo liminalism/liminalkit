@@ -218,8 +218,8 @@ impl Ui<'_> {
         let area = Rect::new(origin.0, origin.1, width.max(1), layout.height);
         self.painter.rounded_rect(
             area,
-            theme.corner_radius,
-            theme.border_width,
+            self.px(theme.corner_radius),
+            self.px(theme.border_width),
             theme.panel,
             theme.panel_edge,
         );
@@ -297,11 +297,11 @@ impl Ui<'_> {
         };
         self.painter.rounded_rect(
             layout.dismiss,
-            theme.corner_radius,
+            self.px(theme.corner_radius),
             if dismiss_focused {
                 self.px(theme.focus_width)
             } else {
-                theme.border_width
+                self.px(theme.border_width)
             },
             dismiss_fill,
             if dismiss_focused {
@@ -338,11 +338,11 @@ impl Ui<'_> {
             };
             self.painter.rounded_rect(
                 *chip,
-                theme.corner_radius,
+                self.px(theme.corner_radius),
                 if focused {
                     self.px(theme.focus_width)
                 } else {
-                    theme.border_width
+                    self.px(theme.border_width)
                 },
                 fill,
                 if focused {

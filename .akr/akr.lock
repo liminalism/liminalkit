@@ -5,8 +5,7 @@ build {
     tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
-    commit git:cccde64ba00165a0c863273c9d0b1cec6c97d4df
-    source_graph "sha256:5b51cfa489f4277c41764b9e93a26ca3642ca3a35903a27fbec2f5c5c34b2f01"
+    source_graph "sha256:fd42cabbcc17b76c39dd2d16b5523ba08e83e922c80748ff0f95e60b73c6a880"
 }
 
 source ".akr/project.akr" {
@@ -14,19 +13,152 @@ source ".akr/project.akr" {
     records 0
 }
 
+source ".akr/records/pixelkit/decisions.akr" {
+    hash "sha256:f5d163dae803c07c5fdf67c6dac026ead1f94d47f51145f60af905dd6ed3af48"
+    records 2
+}
+
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:6f78b16a7729e5245f10217dd877ca1c639070d0752a0c400e0a8f2a48909fcb"
-    records 7
+    hash "sha256:0d7008fe10d4cbeea4fcb023630e68a12cdbdd939e81dc5809efe428f8490a3d"
+    records 14
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
-    hash "sha256:d478583e615e5ad9cf0b910d01428c9b61aa4df5259e516027e26e28c0104915"
-    records 7
+    hash "sha256:30c0666c7ca56668535915542afe9ffcc241a8ae335d32c5275be8bb657046d7"
+    records 14
+}
+
+source ".akr/records/pixelkit/policies.akr" {
+    hash "sha256:18fd2ccca6dfa1126c86290dc2c48dcb0c7b653aea199a29cc97fac5f0e84f0f"
+    records 1
+}
+
+source ".akr/records/pixelkit/questions.akr" {
+    hash "sha256:27e5f0e2c88fa63ce3c8b61d6b0164b38349843f766bf1be5f5d63e1822c9305"
+    records 1
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:5d4c6b3814bb354664557b3491e67264be71faa141c2cd38622ddabc795cda3f"
-    records 4
+    hash "sha256:fcbf7fd1afee2c551e74ddcd887d3ad5b261a7bd2e80131a0af41bc61dad91bd"
+    records 13
+}
+
+resolution @pixelkit.decision.device-pixel-rects/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.facade-crate-and-app-adapter/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.question.publish-readiness/1 {
+    slot blocks
+    to @pixelkit.work.publish-packaging/1
+    hash "sha256:48becae919c94f4c5838c6cc31432c459b3cd89c332d1b1c82cfc74b7a82a18a"
+}
+
+resolution @pixelkit.work.accessibility-validation/1 {
+    slot after
+    to @pixelkit.work.adoptability-pass/1
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.accessibility-validation/1 {
+    slot implements
+    to @pixelkit.decision.facade-crate-and-app-adapter/1
+    hash "sha256:f2c22de12e99347573158487369294b0a49fa255ba47435538478f710055e6ec"
+}
+
+resolution @pixelkit.work.adoptability-pass/1 {
+    slot implements
+    to @pixelkit.decision.device-pixel-rects/1
+    hash "sha256:9cbff144446cb2639fdbd59a174ec8924f4cbbb8861cc8b201d37e81b5fb3d17"
+}
+
+resolution @pixelkit.work.adoptability-pass/1 {
+    slot implements
+    to @pixelkit.decision.facade-crate-and-app-adapter/1
+    hash "sha256:f2c22de12e99347573158487369294b0a49fa255ba47435538478f710055e6ec"
+}
+
+resolution @pixelkit.work.adoptability-pass/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.work.hardware-validation/1 {
+    slot after
+    to @pixelkit.work.adoptability-pass/1
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.performance-comparison/1 {
+    slot after
+    to @pixelkit.work.adoptability-pass/1
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.performance-comparison/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.work.public-docs/1 {
+    slot after
+    to @pixelkit.work.adoptability-pass/1
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.publish-packaging/1 {
+    slot after
+    to @pixelkit.work.performance-comparison/1
+    hash "sha256:76994a8f68c5e57f21b6cab97b0b8d73d66498e756b4e3cd7b771f4aa738eaa7"
+}
+
+resolution @pixelkit.work.publish-packaging/1 {
+    slot after
+    to @pixelkit.work.public-docs/1
+    hash "sha256:00eed795afd6c038eaef93526e454620b436f3934f5b3adc83dcd3443a323267"
+}
+
+resolution @pixelkit.work.text-shaping-fallback/1 {
+    slot after
+    to @pixelkit.work.adoptability-pass/1
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.text-shaping-fallback/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.work.ui-capabilities/1 {
+    slot after
+    to @pixelkit.work.adoptability-pass/1
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.ui-capabilities/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+seal @pixelkit.evidence.adoptability-pass-clippy-doc/1 {
+    state verified
+    hash "sha256:47c304bb6c1caf579b4b050b449d7c8c88fa7e5899247039ac6068290db37020"
+}
+
+seal @pixelkit.evidence.adoptability-pass-tests/1 {
+    state verified
+    hash "sha256:103faaea9aab876a0eff2d36dc513566e5ed6e13e2cf9b8913d68f967fa7c6c2"
 }
 
 seal @pixelkit.evidence.coverage-simd-profile/1 {
@@ -37,6 +169,31 @@ seal @pixelkit.evidence.coverage-simd-profile/1 {
 seal @pixelkit.evidence.coverage-simd-tests/1 {
     state verified
     hash "sha256:112faae8aa88726b45a4afce0614748814c36037be2fd12e2c033d5a9523b9c8"
+}
+
+seal @pixelkit.evidence.gallery-renders-at-2x/1 {
+    state verified
+    hash "sha256:683cbea3678258ea56bd3bf34a504d5f512ab2cc53fcd3d48e631bb225661da5"
+}
+
+seal @pixelkit.evidence.interaction-lifecycle-clippy/1 {
+    state verified
+    hash "sha256:3c60c37ee65bb6a35bcb6d7c737e3fb5a03c169a4a2ad4045f2bdd4224b33952"
+}
+
+seal @pixelkit.evidence.interaction-lifecycle-doc-tests/1 {
+    state verified
+    hash "sha256:f4ba8452b62b8374c2a703f61afc40d6631e33080f9cb6ac9de329f893922c73"
+}
+
+seal @pixelkit.evidence.interaction-lifecycle-regressions/1 {
+    state verified
+    hash "sha256:2793f2eb8046c57ce843adc0988dc7f312eabbfedfb0fe210e49a36c15d5359c"
+}
+
+seal @pixelkit.evidence.interaction-lifecycle-state-review/1 {
+    state verified
+    hash "sha256:77021c169c9c8b512594643bd4c41d1086296bb79a6e20fb2c06559934926fdf"
 }
 
 seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
@@ -64,14 +221,34 @@ seal @pixelkit.evidence.windowing-tests/1 {
     hash "sha256:e4093c7277ffed9e41a58c0a874a0613cd287a42e0992b9a4a15772499f82b4d"
 }
 
+seal @pixelkit.papercut.a-standalone-audit-harness-importing-the-kms/1 {
+    state verified
+    hash "sha256:0f10db38f38ff756c852f18ff4d78ad4f35fd2382ee9ba03cb1032a5981cc229"
+}
+
 seal @pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 {
     state verified
     hash "sha256:2ca083acc8b283058bd4767ec1f8b37f1b661ed3a5672bfe158a2a3d1d213a28"
 }
 
+seal @pixelkit.papercut.building-docs-with-rustdocflags-d-warnings/1 {
+    state verified
+    hash "sha256:49d6ac962a390bdf5ea92dff8a90d95d33ed4708f5b6f145905cc64f58b0f7b7"
+}
+
+seal @pixelkit.papercut.creating-the-interaction-lifecycle-work-record/1 {
+    state verified
+    hash "sha256:ae426bda1ae34add6337f193b08d46be887bb584d729462966560ab268178f5c"
+}
+
 seal @pixelkit.papercut.during-a-read-only-follow-up-assessment-akr/1 {
     state verified
     hash "sha256:de927e2cd7825d1be2ec966a52e25978ba07ca3d1784304ead2b4ed9f4c4e89d"
+}
+
+seal @pixelkit.papercut.during-an-interaction-state-audit-knowledge/1 {
+    state verified
+    hash "sha256:ac445f351208b027b8e6b53b5439ff0f72ddcb3c514106d8ce16018f7a0fd8d8"
 }
 
 seal @pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 {
@@ -82,6 +259,16 @@ seal @pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 {
 seal @pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 {
     state verified
     hash "sha256:07444db44ebf88986848128bf9d7b1444b18b16b1b49d60cae6ef55c31f2b951"
+}
+
+seal @pixelkit.papercut.strict-workspace-clippy-fails-on-eight-existing/1 {
+    state verified
+    hash "sha256:bc099e44909c1a5f03ee058f6a454f7a8c93aed9741411fb2431867d2abcccb9"
+}
+
+seal @pixelkit.papercut.the-all-features-all-targets-test-build/1 {
+    state verified
+    hash "sha256:92ccd8660c8bb3a31e65e12a89e31ae2b629e2ffd50a377640c4d4f30432553a"
 }
 
 seal @pixelkit.papercut.the-experimental-tuning-example-initially-used/1 {
@@ -97,6 +284,26 @@ seal @pixelkit.papercut.the-knowledge-mcp-tools-named-by-agents-md-are/1 {
 seal @pixelkit.papercut.the-new-touch-example-initially-passed-run-app/1 {
     state verified
     hash "sha256:940915a14cd0e70f113ecf00d0019d402008598887ec743a086758235c433047"
+}
+
+seal @pixelkit.papercut.the-readme-said-the-gallery-example-writes/1 {
+    state verified
+    hash "sha256:fd10c02adf804be076d7f875484c333b412c6de8104b59f203baa82699d16e3d"
+}
+
+seal @pixelkit.question.publish-readiness/1 {
+    state open
+    hash "sha256:3bee14c53db11f1c3b29318fc51ae9980e7ca849ddbcc6712eea84f5fbe72e35"
+}
+
+seal @pixelkit.work.adoptability-pass/1 {
+    state completed
+    hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+seal @pixelkit.work.explicit-interaction-lifecycles/1 {
+    state completed
+    hash "sha256:61ca9ce1cc76a1817ed296ade25b2fc1c14a65e630781e653771282fb35cd924"
 }
 
 seal @pixelkit.work.touch-interactions/1 {

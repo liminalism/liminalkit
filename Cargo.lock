@@ -1141,6 +1141,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "liminalkit"
+version = "0.1.0"
+dependencies = [
+ "liminalkit-kms",
+ "liminalkit-raster",
+ "liminalkit-shell",
+ "liminalkit-text",
+ "liminalkit-ui",
+ "liminalkit-windowing",
+]
+
+[[package]]
 name = "liminalkit-kms"
 version = "0.1.0"
 dependencies = [
@@ -1186,7 +1198,6 @@ dependencies = [
  "liminalkit-raster",
  "liminalkit-shell",
  "liminalkit-text",
- "liminalkit-windowing",
  "unicode-segmentation",
  "zeroize",
 ]
@@ -1199,8 +1210,6 @@ dependencies = [
  "accesskit_winit",
  "liminalkit-raster",
  "liminalkit-shell",
- "liminalkit-text",
- "liminalkit-ui",
  "softbuffer",
  "winit",
 ]

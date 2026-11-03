@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "TrueType parsing, OpenType substitution and positioning, exact-area glyph rasterization and a string cache, with no external dependencies. The text layer of liminalkit."
 
 [dependencies]
 liminalkit-raster = { workspace = true }
