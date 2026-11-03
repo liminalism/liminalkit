@@ -41,6 +41,14 @@ name = "window"
 required-features = ["test-fonts"]
 
 [[example]]
+name = "tutorial"
+required-features = ["test-fonts"]
+
+[[example]]
+name = "frame_bench"
+required-features = ["test-fonts"]
+
+[[example]]
 name = "window_lowlevel"
 required-features = ["test-fonts"]
 

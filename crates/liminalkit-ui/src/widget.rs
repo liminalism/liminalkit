@@ -762,7 +762,20 @@ impl<'a> Ui<'a> {
         let column_gap = self.px(COLUMN_GAP);
         let gutter = self.px(TABLE_GUTTER);
         let content_width = (area.w - gutter).max(0);
-        let widths = column_widths(columns, content_width, column_gap);
+        // Fixed column widths are logical, like every other size a screen
+        // writes down; flex weights are unitless.
+        let scaled: Vec<Column> = columns
+            .iter()
+            .map(|column| Column {
+                title: column.title.clone(),
+                width: match column.width {
+                    Width::Fixed(width) => Width::Fixed(self.px(width)),
+                    flex => flex,
+                },
+                align: column.align,
+            })
+            .collect();
+        let widths = column_widths(&scaled, content_width, column_gap);
         let (header, body) = area.split_top(row_height);
 
         // Header

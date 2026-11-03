@@ -9,7 +9,7 @@ cargo fmt --all --check
 cargo run -p liminalkit-ui --example gallery --features test-fonts   # target/gallery@1x.png
 ```
 
-Stable Rust 1.85 or newer. The workspace forbids `unsafe`. `test-fonts` embeds two Noto faces for examples and tests; application builds leave it off.
+Those four commands are what `.github/workflows/ci.yml` runs, plus the test suite with the `accessibility` feature and the gallery render. Stable Rust 1.85 or newer. The workspace forbids `unsafe`. `test-fonts` embeds two Noto faces for examples and tests; application builds leave it off.
 
 ## What a change should keep true
 

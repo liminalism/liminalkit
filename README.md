@@ -150,10 +150,14 @@ cargo test --workspace --features liminalkit/test-fonts
 cargo run -p liminalkit-ui --example gallery --features test-fonts
 cargo run -p liminalkit-ui --example gallery --features test-fonts -- 2.0
 
-# The quick start, the interactive demo through App, and the same demo over PixelApp
+# The quick start, the tutorial's screen, the interactive demo through App, and the same demo over PixelApp
 cargo run -p liminalkit --features test-fonts --example hello
+cargo run -p liminalkit --features test-fonts --example tutorial
 cargo run -p liminalkit --features test-fonts --example window
 cargo run -p liminalkit --features test-fonts --example window_lowlevel
+
+# Frame times for one operational screen at 720p to 4K, with no window
+cargo run --release -p liminalkit --features test-fonts --example frame_bench
 
 # Tiled panes with floating windows, and two OS windows
 cargo run -p liminalkit --features test-fonts --example panes
@@ -169,11 +173,11 @@ cargo run -p liminalkit-kms --example probe
 
 `test-fonts` embeds Noto Sans and Noto Sans Thai for examples and tests. Application builds leave it off. Font details are in [`crates/liminalkit-text/test-fonts/README.md`](crates/liminalkit-text/test-fonts/README.md).
 
-`LIMINALKIT_FRAME_LOG=1` prints p50, p95, and maximum timings for the phases the shell was given.
+`LIMINALKIT_FRAME_LOG=1` prints p50, p95, and maximum timings for the phases the shell was given. `frame_bench` renders one busy screen headlessly at several resolutions and prints the cost of a full redraw; software rendering scales with pixels, and this is where to see by how much on a given machine.
 
 ## Contributing
 
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the map: crates, the frame, units, focus, popups, the two hosts. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the build, test, and review expectations. `AGENTS.md` describes the project's knowledge ledger, which contributors do not need to use.
+[`docs/TUTORIAL.md`](docs/TUTORIAL.md) grows the quick start into a filterable table with a dialog. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the map: crates, the frame, units, focus, popups, the two hosts. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the build, test, and review expectations. `AGENTS.md` describes the project's knowledge ledger, which contributors do not need to use.
 
 ## License
 

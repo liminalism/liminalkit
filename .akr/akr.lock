@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:995d75f4270cffbd0c4e5869430d3a23f642165e5299b590c05ec5f2cd30e332"
+    source_graph "sha256:808de5cd30f0ba4b374f8e6fd7821caaab7a8cf52c55a5ac18967bef051d565c"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/pixelkit/decisions.akr" {
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:360011a9a7701883f76b16014732d38af31956011424ceddd97dd192c8ce18ae"
-    records 16
+    hash "sha256:0a2a960f49528176d029473d004a6a7a9c52838ef14590595ed7754bb274eb8d"
+    records 17
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
@@ -39,7 +39,7 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:c78d406236af0c4cf2ad85690129213ef3cfc342116e05ea94fd8fdc436a6e85"
+    hash "sha256:df4f472bcb911cabb6e791b9ce8510ca72aa6cb410a1d333f553baef20ad0f43"
     records 13
 }
 
@@ -124,13 +124,13 @@ resolution @pixelkit.work.public-docs/1 {
 resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.performance-comparison/1
-    hash "sha256:76994a8f68c5e57f21b6cab97b0b8d73d66498e756b4e3cd7b771f4aa738eaa7"
+    hash "sha256:5d6f8a8643beaafcb34d78f53470d0f780c9f24a59504e3aa9e4b6e62a6df6e2"
 }
 
 resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.public-docs/1
-    hash "sha256:cd40e34876437e9e0576909a1bc61845f22f3959b5c8a8f5951f1c623d339f91"
+    hash "sha256:f999d3363a7a1e6f5ef6ddf36370d5af581831067fbe806852b2bf068f22f5fe"
 }
 
 resolution @pixelkit.work.text-shaping-fallback/1 {
@@ -180,6 +180,11 @@ seal @pixelkit.evidence.coverage-simd-profile/1 {
 seal @pixelkit.evidence.coverage-simd-tests/1 {
     state verified
     hash "sha256:112faae8aa88726b45a4afce0614748814c36037be2fd12e2c033d5a9523b9c8"
+}
+
+seal @pixelkit.evidence.frame-bench-resolution-sweep/1 {
+    state verified
+    hash "sha256:3fd404557eb58284c10c95f9c4104e958f6d6bcb7e0599ddf2d2a6bdff8a95bc"
 }
 
 seal @pixelkit.evidence.gallery-renders-at-2x/1 {

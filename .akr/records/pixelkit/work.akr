@@ -146,12 +146,12 @@ record pixelkit.work.hardware-validation/1 : work {
 record pixelkit.work.performance-comparison/1 : work {
     title "Reproducible performance comparison against egui and Freya on the same screen"
     state proposed
-    scope [ path "benches/**", path "crates/liminalkit/examples/**" ]
+    scope [ path "crates/liminalkit-ui/examples/**", path "crates/liminalkit/examples/**" ]
     intent """
         Turn the reported ~30% memory reduction over Freya in Lege into a reproducible result. Build one operational screen (a table, a form, a scrolling list, a few controls) in liminalkit, egui and Freya in a separate benchmark workspace outside the published crates. Measure resident memory, startup latency, idle CPU (egui can also sleep, so measure rather than claim), p95 frame time under scripted interaction, binary size, and the same at 1080p, 1440p and 4K to find where software rendering's cost overtakes its memory savings. Report numbers with the machine, the resolution and the commit, and commit the harness so the table can be regenerated.
         """
     note """
-        Not started. The result is also the honest answer to 'when should I choose this', which the README currently states from reasoning rather than measurement.
+        The liminalkit half of the resolution sweep exists since 2026-11-03: crates/liminalkit/examples/frame_bench.rs renders one operational screen headlessly at 720p to 4K and prints cold, p50, p95 and max redraw times and resident memory; the first measurement is evidence frame-bench-resolution-sweep (about 2 ms per full redraw at 1080p, 10 ms at 4K on an i7-13700H). Still open: the same screen in egui and Freya with their windows, idle CPU, startup and binary size, in a separate workspace.
         """
     after [ @pixelkit.work.adoptability-pass ]
     implements [ @pixelkit.policy.explicit-state-toolkit ]
@@ -173,7 +173,7 @@ record pixelkit.work.public-docs/1 : work {
         Add to the README a screenshot of a real Lege screen and of a kiosk screen on a Pi, and the gallery render. Write docs/ARCHITECTURE.md (the crates, the frame lifecycle, units, focus, the two hosts, the presenter seam) and a short tutorial that grows hello.rs into a form with a table and a dropdown. Give every crate a README and a lib.rs doc that answers what it is for and what it is not, written for someone who has not read the others. Make RUSTDOCFLAGS=-D warnings clean for the whole workspace and keep it clean in CI.
         """
     note """
-        docs/ARCHITECTURE.md and a warnings-clean rustdoc for the whole workspace were done 2026-11-03. Still open: the screenshots (need a Lege build and a Pi), the tutorial, per-crate READMEs, and a CI job that runs the doc check.
+        Done 2026-11-03: docs/ARCHITECTURE.md; docs/TUTORIAL.md with its compiled counterpart crates/liminalkit/examples/tutorial.rs; a warnings-clean rustdoc for the whole workspace; .github/workflows/ci.yml running fmt, clippy -D warnings, tests with and without accessibility, docs, and the gallery render (written, not yet observed running on GitHub). Still open: the screenshots (need a Lege build and a Pi) and per-crate READMEs.
         """
     after [ @pixelkit.work.adoptability-pass ]
     source {

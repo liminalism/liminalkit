@@ -62,6 +62,20 @@ record pixelkit.evidence.coverage-simd-tests/1 : evidence {
         """
 }
 
+record pixelkit.evidence.frame-bench-resolution-sweep/1 : evidence {
+    title "Headless frame cost from 720p to 4K on one laptop"
+    state verified
+    result pass
+    method command
+    observed_at git:b3c1c783af118feaa6d6cad39fd3f34ad01d5384
+    command "cargo run --release -p liminalkit --features test-fonts --example frame_bench"
+    artifact "crates/liminalkit/examples/frame_bench.rs"
+    summary """
+        Full redraw of one operational screen (panel, 40-row table, 60-row list, six label sizes, AA shapes), warm text cache, 60 frames, on a 13th Gen Intel i7-13700H laptop: 1280x720 p50 1.03 ms / p95 1.14 ms, 7.9 MiB resident; 1920x1080 p50 1.97 / p95 2.27 ms, 12.6 MiB; 1920x1080 at 1.5x p50 2.07 / p95 2.38 ms; 2560x1440 at 1.5x p50 3.23 / p95 3.76 ms, 27.6 MiB; 3840x2160 at 2x p50 9.77 / p95 11.04 ms, 45.2 MiB. Cold first frames 10 to 42 ms. Cost is close to linear in pixel count; 4K is under one 60 Hz frame for a full repaint. liminalkit only: no egui or Freya comparison yet.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.gallery-renders-at-2x/1 : evidence {
     title "Gallery proportions hold at 2x scale"
     state verified
