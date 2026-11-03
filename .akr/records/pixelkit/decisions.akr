@@ -111,3 +111,44 @@ record pixelkit.decision.popups-claim-input-first/1 : decision {
     implements [ @pixelkit.policy.explicit-state-toolkit ]
     author "dk"
 }
+
+record pixelkit.decision.test-fonts-unpublished-crate/1 : decision {
+    title "The Noto test fonts live in liminalkit-test-fonts, a publish = false crate reached only as a path-only dev-dependency"
+    state proposed
+    scope [
+        path "crates/liminalkit-test-fonts/**",
+        path "crates/liminalkit-text/Cargo.toml",
+        path "crates/liminalkit-ui/Cargo.toml",
+        path "crates/liminalkit/Cargo.toml"
+    ]
+    topic test-fonts
+    decision """
+        Noto Sans Regular 2.004 and Noto Sans Thai Regular 2.000 (unmodified fonts-noto-core builds, SIL OFL 1.1, licence text beside them) are the fixtures of liminalkit-test-fonts, a workspace crate with publish = false that exposes latin(), thai(), LATIN, THAI, set() and style(). Every other crate reaches it only as a dev-dependency declared with a path and no version, which cargo drops when it publishes, so no published crate and no application build carries the 550 KB. The test-fonts feature is gone from liminalkit-text, liminalkit-ui and liminalkit; examples no longer need a feature. liminalkit-text's own unit tests include the same files under cfg(test) by relative path, because they need the faces as that crate's own types rather than a dependency's; a published copy of the text crate therefore builds but its unit tests are run from the repository.
+        """
+    context """
+        The owner asked that the fonts be removed from any crate that might be published so they are not roped in later. Keeping the feature with the files excluded would have shipped a feature that cannot compile; a fixtures crate that is never published is the shape cargo supports directly.
+        """
+    consequences """
+        The README quick start embeds a face explicitly, which is what an application does anyway. Dependent crates cannot be cargo-packaged until liminalkit-raster is on crates.io, so the dev-dependency stripping is cargo's documented behaviour rather than something observed here; the package file list of liminalkit-text was observed to contain no fonts.
+        """
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}
+
+record pixelkit.decision.versioning-method/1 : decision {
+    title "Before 1.0 the minor version counts API generations, derived from history; the workspace is at 0.5.0"
+    state proposed
+    scope [ path "CHANGELOG.md", path "CONTRIBUTING.md", path "Cargo.toml" ]
+    topic versioning
+    decision """
+        One version for the whole workspace, with every workspace path dependency pinning it exactly. Before 1.0 the number is 0.MINOR.PATCH. MINOR counts API generations: a generation closes when a change lands after which an application had to edit its own code to keep building or behaving the same (a renamed crate, module or type; a changed signature; a changed meaning of an existing call such as units, frame lifecycle or input ownership; a removed feature). PATCH counts releases within a generation that a dependant absorbs without an edit. A generation counts whether or not it was tagged or published, because applications consumed each one from git. 1.0 when a generation has gone through two application release cycles without a breaking change and the publishing question is resolved. The method and the release steps are in CONTRIBUTING.md under Versioning; CHANGELOG.md lists the generations with the commits that closed them.
+        """
+    context """
+        The owner asked that a first published crate not appear as 0.1.0 but reflect the working state, with a number well under 1.0, and asked for a method rather than a pick. Walking all 29 commits gives five generations: 0.1 extraction from restaurant-pos as pixelkit (d02493c, 2026-08-17); 0.2 the shell rework for LegeOS with text input, IME, presenter injection, clipboard and accessibility (merged 7492c49, 2026-09-24); 0.3 the windowing crate split (593e10d, 2026-09-29); 0.4 the rename to liminalkit with the kms host (cccde64, 2026-10-28); 0.5 the adoptability pass of 2026-11-03 (explicit lifecycle, device-pixel contract, generic Focus, popup input contract, the facade, removal of the test-fonts feature). The owner's guess was 'possibly under .5'; the method lands on exactly 0.5.0 because the rename counted as a generation, every import having changed. Counting only generations under the liminalkit name would give 0.2.0; excluding the rename would give 0.4.0.
+        """
+    consequences """
+        The root Cargo.toml and its workspace dependency requirements say 0.5.0. Cargo treats the 0.x minor as the compatibility boundary, so the method coincides with what keeps cargo update safe for a dependant. Every future breaking change opens a new generation and gets a Breaking line in the changelog saying what a dependant edits. The minor number signals API churn, not maturity: 0.5 does not mean halfway to 1.0.
+        """
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}

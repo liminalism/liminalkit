@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:491cf6a3c608ffd17621c8fc341cb42cd24d669ce29b0029685f1cf83a50e4c5"
+    source_graph "sha256:9fe16d33dafdcad784f232ad5c67ffc45b45ebbd2a58aab6b18ade14337a4f28"
 }
 
 source ".akr/project.akr" {
@@ -14,13 +14,13 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/decisions.akr" {
-    hash "sha256:169457a6fa3ddf998ce7acbb495f3d56aa19ca7b60ab8dccc091f4f354b1c34f"
-    records 4
+    hash "sha256:af0deef8fc62f6b90a416fc56049c19d8b6e8d914cd102fd08ddac0572b93356"
+    records 6
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:c1b54d83b8fcfb796d1113bc4b4f4f05660f81e55901341880ea973ccf189645"
-    records 19
+    hash "sha256:2afe229593abc54f5b5e4600af2d01045840428209598a5186c0600d08b4f52f"
+    records 20
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
@@ -39,7 +39,7 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:7dc91c9c848ea043e133790ffd5f63e1647abde804adb0fcc7810d987120d43a"
+    hash "sha256:6ce2c161318d67fbe1736118230d84d2d129f503985b1b9da4bf68048fb45d71"
     records 13
 }
 
@@ -73,10 +73,22 @@ resolution @pixelkit.decision.popups-claim-input-first/1 {
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
 }
 
+resolution @pixelkit.decision.test-fonts-unpublished-crate/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.versioning-method/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
 resolution @pixelkit.question.publish-readiness/1 {
     slot blocks
     to @pixelkit.work.publish-packaging/1
-    hash "sha256:9ba6ca6d67f60b8ec66344906f245abad8aef4576b7e66fa7f2f23cd898c8f78"
+    hash "sha256:b2f25dd285af4d965b2bdf6b5a8e642062c1bee22f52b399de9475f0f1c9fc03"
 }
 
 resolution @pixelkit.work.accessibility-validation/1 {
@@ -202,6 +214,11 @@ seal @pixelkit.evidence.coverage-simd-tests/1 {
 seal @pixelkit.evidence.crate-package-contents/1 {
     state verified
     hash "sha256:3ad04548d7cae62e5efa2899ad5d84ba0ff3d2ef17f821e3c37c334ebd7c5617"
+}
+
+seal @pixelkit.evidence.fonts-out-of-package-and-tests/1 {
+    state verified
+    hash "sha256:4b9ec63b0e80f9bd8c7f7d8a29ac73946a83f04970e84dae76db8d30b074eafb"
 }
 
 seal @pixelkit.evidence.frame-bench-resolution-sweep/1 {

@@ -88,6 +88,19 @@ record pixelkit.evidence.crate-package-contents/1 : evidence {
     author "dk"
 }
 
+record pixelkit.evidence.fonts-out-of-package-and-tests/1 : evidence {
+    title "Fonts absent from the text crate's package; every test configuration passes at 0.5.0"
+    state verified
+    result pass
+    method command
+    observed_at git:ff2315c93c237e14189144d502e41d550c0b9b1e
+    command "cargo package --list -p liminalkit-text --allow-dirty && cargo package -p liminalkit-raster --allow-dirty && cargo test --workspace && cargo test -p liminalkit-text --features bidi && cargo test -p liminalkit -p liminalkit-ui --features liminalkit/accessibility,liminalkit-ui/accessibility && cargo clippy --workspace --all-targets --features liminalkit/accessibility,liminalkit/bidi -- -D warnings && cargo clippy --workspace --all-targets -- -D warnings && RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --no-deps --features liminalkit/accessibility,liminalkit/bidi && cargo fmt --all --check && cargo run -p liminalkit-ui --example gallery"
+    summary """
+        liminalkit-text's package list is Cargo.toml, Cargo.lock, README.md, examples/glyph_sheet.rs and src/: no font files. liminalkit-raster packages as 0.5.0 (26 files, 247.6 KiB) and the packaged copy builds. Without any feature the workspace passes 548 tests, 0 failed, including the two tests of the new fixtures crate; 83 pass in liminalkit-text with bidi; 191 with accessibility. Clippy with and without features, rustdoc and fmt are clean. The gallery example renders with no feature flag.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.frame-bench-resolution-sweep/1 : evidence {
     title "Headless frame cost from 720p to 4K on one laptop"
     state verified
