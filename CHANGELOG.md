@@ -36,9 +36,27 @@ than the one it was extracted from can pick up.
 - Direction marks and embeddings (U+200E, U+200F, U+202A..U+202E,
   U+2066..U+2069, U+061C) are never drawn; they used to render as `.notdef`
   boxes.
+- Text is drawn with gamma-corrected coverage by default
+  (`TextRendering::DEFAULT`: gamma 1.8, contrast 0.5), so glyph edges land
+  on different pixel values than before; layout and measurements do not
+  change. An application that compares pixels against renders from earlier
+  versions, or wants the old look, sets
+  `TextCache::set_rendering(TextRendering::UNCORRECTED)`.
 
 ### Added
 
+- Text rendering options, `liminalkit_text::TextRendering`, held by the
+  `TextCache` (`with_rendering`, `set_rendering`, `rendering`): coverage
+  corrected for the sRGB blend against the background each string is drawn
+  on (`gamma`, `contrast`); opt-in vertical grid fitting that puts the
+  baseline, x-height, cap height and ascender of Latin faces on whole pixels
+  and folds small overshoots onto them (`hinting: Hinting::Vertical`); and
+  opt-in horizontal stem darkening (`stem_darkening`). `text::render_with`
+  and `text::render_shaped_with` rasterize with them. Underneath,
+  `liminalkit_raster::gamma` builds the coverage curves, and
+  `Painter::blend_coverage_row_mapped`, `Painter::backdrop` and
+  `blend::blend_coverage_span_mapped` (with its scalar specification) apply
+  them.
 - `liminalkit`, the facade crate: re-exports the component crates as
   `liminalkit::{raster, text, shell, ui, windowing, kms}`, a prelude, and
   `App`/`Screen`/`Context`, the short road from a type that draws a screen to

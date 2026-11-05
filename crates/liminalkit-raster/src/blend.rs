@@ -133,6 +133,60 @@ pub fn blend_coverage_span_scalar(destination: &mut [u32], color: u32, coverage:
     }
 }
 
+/// [`blend_coverage_span`] with every coverage byte first put through
+/// `curve` (see [`crate::gamma`]): the text kernel when coverage is
+/// corrected for the blend.
+///
+/// The same sixteen-pixel chunks. Their empty and full tests read the raw
+/// coverage, which is only sound while the curve keeps 0 and 255 where they
+/// are; every curve [`crate::gamma::curve`] builds does, and for any other
+/// the chunks are mapped whole, so the kernel still matches its
+/// specification for every table.
+#[inline]
+pub fn blend_coverage_span_mapped(
+    destination: &mut [u32],
+    color: u32,
+    coverage: &[u8],
+    curve: &[u8; 256],
+) {
+    if !fast_paths_enabled() {
+        return blend_coverage_span_mapped_scalar(destination, color, coverage, curve);
+    }
+    let exact_ends = curve[0] == 0 && curve[255] == 255;
+    let len = destination.len().min(coverage.len());
+    let (destination, coverage) = (&mut destination[..len], &coverage[..len]);
+    let mut pixels = destination.chunks_exact_mut(16);
+    let mut covers = coverage.chunks_exact(16);
+    for (pixels, covers) in (&mut pixels).zip(&mut covers) {
+        let covers: &[u8; 16] = covers.try_into().expect("chunks of sixteen");
+        match u128::from_ne_bytes(*covers) {
+            0 if exact_ends => {}
+            u128::MAX if exact_ends => pixels.fill(color),
+            _ => {
+                let pixels: &mut [u32; 16] = pixels.try_into().expect("chunks of sixteen");
+                for (pixel, &cover) in pixels.iter_mut().zip(covers) {
+                    *pixel = blend_pixel(*pixel, color, curve[usize::from(cover)]);
+                }
+            }
+        }
+    }
+    let done = len - len % 16;
+    blend_coverage_span_mapped_scalar(&mut destination[done..], color, &coverage[done..], curve);
+}
+
+/// The specification [`blend_coverage_span_mapped`] is held to.
+#[inline]
+pub fn blend_coverage_span_mapped_scalar(
+    destination: &mut [u32],
+    color: u32,
+    coverage: &[u8],
+    curve: &[u8; 256],
+) {
+    for (pixel, &cover) in destination.iter_mut().zip(coverage) {
+        *pixel = blend_pixel(*pixel, color, curve[usize::from(cover)]);
+    }
+}
+
 /// One premultiplied `0xAARRGGBB` pixel over a destination: each channel is
 /// `source + destination × (255 − source alpha) / 255`, rounded to nearest.
 /// A transparent source leaves the destination exactly as it was. With
@@ -332,6 +386,53 @@ mod tests {
             blend_coverage_span(&mut fast, 0x00ff_ffff, &vec![128u8; len]);
             blend_coverage_span_scalar(&mut spec, 0x00ff_ffff, &vec![128u8; len]);
             assert_eq!(fast, spec);
+        }
+    }
+
+    #[test]
+    fn the_chunked_mapped_blend_is_the_specification() {
+        // A real text curve, the identity, and a table that moves both ends,
+        // which the chunk shortcuts must not assume away.
+        let curves = [
+            crate::gamma::curve(20, 240, 2.2, 0.5),
+            crate::gamma::curve(235, 30, 1.8, 0.0),
+            crate::gamma::IDENTITY,
+            std::array::from_fn(|index| 255 - index as u8),
+        ];
+        for len in 0..90 {
+            for seed in 0..3 {
+                for (pattern, covers) in coverage_patterns(len, seed).into_iter().enumerate() {
+                    let original: Vec<u32> = (0..len as u32)
+                        .map(|i| i.wrapping_mul(0x9e37_79b9))
+                        .collect();
+                    for (which, curve) in curves.iter().enumerate() {
+                        let mut fast = original.clone();
+                        let mut spec = original.clone();
+                        blend_coverage_span_mapped(&mut fast, 0x00b0_174f, &covers, curve);
+                        blend_coverage_span_mapped_scalar(&mut spec, 0x00b0_174f, &covers, curve);
+                        assert_eq!(fast, spec, "len={len} pattern={pattern} curve={which}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_identity_curve_blends_exactly_like_the_plain_kernel() {
+        for len in [0, 7, 16, 33, 89] {
+            for (pattern, covers) in coverage_patterns(len, 1).into_iter().enumerate() {
+                let original: Vec<u32> = (0..len as u32).map(|i| i * 0x0103_0507).collect();
+                let mut plain = original.clone();
+                let mut mapped = original.clone();
+                blend_coverage_span(&mut plain, 0x0012_3456, &covers);
+                blend_coverage_span_mapped(
+                    &mut mapped,
+                    0x0012_3456,
+                    &covers,
+                    &crate::gamma::IDENTITY,
+                );
+                assert_eq!(plain, mapped, "len={len} pattern={pattern}");
+            }
         }
     }
 

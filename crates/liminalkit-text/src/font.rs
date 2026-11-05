@@ -6,6 +6,7 @@
 //! letter-spacing; that is what the shaper and the cache key on.
 
 use crate::layout::{self, Gdef, LayoutTable, ShapedGlyph};
+use crate::rendering::VerticalZones;
 use crate::sfnt::{CharacterMap, FontMetrics, GlyphSource, HorizontalMetrics, Outline, Sfnt};
 
 /// Substitutions applied to every run.
@@ -31,6 +32,8 @@ pub struct Face {
     gdef: Gdef<'static>,
     substitution_lookups: Vec<u16>,
     positioning_lookups: Vec<u16>,
+    /// Measured once at parse time, for vertical grid fitting.
+    zones: Option<VerticalZones>,
 }
 
 impl std::fmt::Debug for Face {
@@ -72,7 +75,7 @@ impl Face {
             .map(|table| table.lookups_for(&POSITIONING_FEATURES))
             .unwrap_or_default();
 
-        Some(Face {
+        let mut face = Face {
             metrics,
             characters,
             advances,
@@ -82,7 +85,16 @@ impl Face {
             gdef,
             substitution_lookups,
             positioning_lookups,
-        })
+            zones: None,
+        };
+        face.zones = VerticalZones::measure(&face);
+        Some(face)
+    }
+
+    /// The heights vertical grid fitting snaps to, if the face has the
+    /// Latin letters they are measured from.
+    pub(crate) fn vertical_zones(&self) -> Option<VerticalZones> {
+        self.zones
     }
 
     pub fn units_per_em(&self) -> f32 {

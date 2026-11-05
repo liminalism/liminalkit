@@ -7,6 +7,7 @@
 
 use crate::font::{self, Face, FaceId, FontSet, TextStyle};
 use crate::layout::ShapedGlyph;
+use crate::rendering::{embolden_horizontally, TextRendering, VerticalGrid};
 use liminalkit_raster::kernel::{CoverageBitmap, FillRule, RasterKernel};
 use std::collections::BTreeMap;
 
@@ -311,18 +312,54 @@ pub struct RenderedText {
 /// own boundary.
 const PADDING: f32 = 1.0;
 
-/// Render a string with a style.
+/// Render a string with a style, unhinted and undarkened.
 pub fn render(set: &FontSet, style: TextStyle, text: &str) -> RenderedText {
     render_shaped(&shape(set, style, text), style.size)
 }
 
+/// Render a string with a style and the rasterization options of
+/// `rendering` (its hinting and stem darkening; coverage correction happens
+/// when the bitmap is drawn, not here).
+pub fn render_with(
+    set: &FontSet,
+    style: TextStyle,
+    text: &str,
+    rendering: &TextRendering,
+) -> RenderedText {
+    render_shaped_with(&shape(set, style, text), style.size, rendering)
+}
+
 /// Render an already-shaped string, so a caller that measured first does not
-/// pay to shape twice.
+/// pay to shape twice. Unhinted and undarkened.
 pub fn render_shaped(shaped: &ShapedText, size_px: f32) -> RenderedText {
+    render_shaped_with(shaped, size_px, &TextRendering::UNCORRECTED)
+}
+
+/// [`render_shaped`] with the rasterization options of `rendering`.
+///
+/// With [`Hinting::Vertical`](crate::Hinting::Vertical) each run's outlines
+/// are stretched, piece by piece, so its face's zones land on whole pixels;
+/// marks are fitted together with their base, because the stretch maps the
+/// glyph's offset and its outline as one height. The baseline row is the same integer row either way, and the
+/// advance is unchanged.
+pub fn render_shaped_with(
+    shaped: &ShapedText,
+    size_px: f32,
+    rendering: &TextRendering,
+) -> RenderedText {
     let advance = shaped.width(size_px);
     let tracking = shaped.tracking * size_px;
     let ascent = shaped.ascent(size_px);
     let descent = shaped.descent(size_px);
+    let darkening = rendering.darkening_px(size_px);
+    let grids: Vec<Option<VerticalGrid>> = shaped
+        .runs
+        .iter()
+        .map(|run| match rendering.hinting {
+            crate::Hinting::None => None,
+            crate::Hinting::Vertical => VerticalGrid::new(run.face, run.scale(size_px)),
+        })
+        .collect();
 
     // Ink bounds in device space, relative to a pen at x = 0 and the baseline
     // at y = 0, with y increasing downward.
@@ -332,7 +369,7 @@ pub fn render_shaped(shaped: &ShapedText, size_px: f32) -> RenderedText {
     let mut bottom = descent;
 
     let mut pen = 0.0f32;
-    for run in &shaped.runs {
+    for (run, grid) in shaped.runs.iter().zip(&grids) {
         let scale = run.scale(size_px);
         for glyph in &run.glyphs {
             if let Some(bounds) = run
@@ -341,12 +378,22 @@ pub fn render_shaped(shaped: &ShapedText, size_px: f32) -> RenderedText {
                 .and_then(|outline| outline.bounds())
             {
                 let x = pen + glyph.x_offset * scale;
-                let y = -glyph.y_offset * scale;
-                left = left.min(x + bounds[0] * scale);
-                right = right.max(x + bounds[2] * scale);
+                // A widened stem can reach past the outline's box by twice
+                // the darkening, at a sharp corner's capped miter.
+                left = left.min(x + bounds[0] * scale - 2.0 * darkening);
+                right = right.max(x + bounds[2] * scale + 2.0 * darkening);
                 // Design-space y is upward; device y is downward.
-                top = top.min(y - bounds[3] * scale);
-                bottom = bottom.max(y - bounds[1] * scale);
+                match grid {
+                    None => {
+                        let y = -glyph.y_offset * scale;
+                        top = top.min(y - bounds[3] * scale);
+                        bottom = bottom.max(y - bounds[1] * scale);
+                    }
+                    Some(grid) => {
+                        top = top.min(-grid.map(bounds[3] + glyph.y_offset));
+                        bottom = bottom.max(-grid.map(bounds[1] + glyph.y_offset));
+                    }
+                }
             }
             pen += glyph.x_advance * scale;
             if !run.face.is_mark(glyph.glyph) {
@@ -366,15 +413,27 @@ pub fn render_shaped(shaped: &ShapedText, size_px: f32) -> RenderedText {
     let mut subpaths: Vec<(usize, usize)> = Vec::new();
 
     let mut pen = origin_x;
-    for run in &shaped.runs {
+    for (run, grid) in shaped.runs.iter().zip(&grids) {
         let scale = run.scale(size_px);
         for glyph in &run.glyphs {
             let x = pen + glyph.x_offset * scale;
-            let y = baseline_y - glyph.y_offset * scale;
             if let Some(outline) = run.face.outline(glyph.glyph) {
                 points.clear();
                 subpaths.clear();
-                flatten(&outline, scale, x, y, &mut points, &mut subpaths);
+                match grid {
+                    None => {
+                        let y = baseline_y - glyph.y_offset * scale;
+                        flatten(&outline, &mut points, &mut subpaths, |px, py| {
+                            [x + px * scale, y - py * scale]
+                        });
+                    }
+                    Some(grid) => {
+                        flatten(&outline, &mut points, &mut subpaths, |px, py| {
+                            [x + px * scale, baseline_y - grid.map(py + glyph.y_offset)]
+                        });
+                    }
+                }
+                embolden_horizontally(&mut points, &subpaths, darkening);
                 if !subpaths.is_empty() {
                     kernel.fill(
                         &points,
@@ -409,17 +468,15 @@ pub fn render_shaped(shaped: &ShapedText, size_px: f32) -> RenderedText {
 /// off-curve points imply an on-curve point halfway between them — a
 /// compression trick that saves a point per curve and costs this
 /// reconstruction.
+///
+/// `map` takes a design-space point (y up) to device space (y down): a
+/// uniform scale, or one through a `VerticalGrid`.
 fn flatten(
     outline: &Outline,
-    scale: f32,
-    origin_x: f32,
-    origin_y: f32,
     points: &mut Vec<[f32; 2]>,
     subpaths: &mut Vec<(usize, usize)>,
+    map: impl Fn(f32, f32) -> [f32; 2],
 ) {
-    // Design space is y-up, device space is y-down.
-    let map = |x: f32, y: f32| [origin_x + x * scale, origin_y - y * scale];
-
     for contour in &outline.contours {
         if contour.len() < 2 {
             continue;
@@ -1129,5 +1186,127 @@ mod tracking_tests {
         let cut = shaped.fit(full - 1.0, 20.0).unwrap();
         assert!(cut < "ABCDEFGH".len());
         assert!(shape(set(), style, &"ABCDEFGH"[..cut]).width(20.0) <= full - 1.0);
+    }
+}
+
+#[cfg(test)]
+mod rendering_tests {
+    use super::*;
+    use crate::font::test_fonts::{set, LATIN, THAI};
+    use crate::{Hinting, TextRendering};
+
+    fn hinted() -> TextRendering {
+        TextRendering::DEFAULT.with_hinting(Hinting::Vertical)
+    }
+
+    fn row_ink(rendered: &RenderedText, row: usize) -> u32 {
+        (0..rendered.bitmap.width)
+            .map(|x| u32::from(rendered.bitmap.get(x, row)))
+            .sum()
+    }
+
+    #[test]
+    fn options_that_do_not_touch_rasterization_render_what_render_does() {
+        for text in ["Settings", "ผัดกะเพรา ฿70", "Ay"] {
+            let style = TextStyle::new(LATIN, 13.0);
+            let plain = render(set(), style, text);
+            assert_eq!(
+                render_with(set(), style, text, &TextRendering::UNCORRECTED),
+                plain
+            );
+            // Coverage correction happens when drawing, not here.
+            assert_eq!(
+                render_with(set(), style, text, &TextRendering::DEFAULT),
+                plain
+            );
+        }
+    }
+
+    #[test]
+    fn vertical_hinting_moves_neither_the_baseline_nor_the_advance() {
+        for size in [11.0, 12.5, 13.0, 15.0, 17.0, 21.25, 34.0] {
+            for text in ["Settings", "Résumé Ågård", "pgjy (1/4) {x}", "฿1,240.50"] {
+                let style = TextStyle::new(LATIN, size);
+                let plain = render(set(), style, text);
+                let fitted = render_with(set(), style, text, &hinted());
+                assert_eq!(fitted.baseline_y, plain.baseline_y, "{text:?} at {size}");
+                assert_eq!(fitted.advance, plain.advance, "{text:?} at {size}");
+                assert_eq!(fitted.origin_x, plain.origin_x, "{text:?} at {size}");
+                // Never taller than the unhinted line: the grid's anchors
+                // are the face's own ascender and descender. (Not checked
+                // against `line_height`, which ฿ already overshoots
+                // unhinted at some sizes.)
+                assert!(
+                    fitted.bitmap.height <= plain.bitmap.height,
+                    "{text:?} at {size}: {} rows against {}",
+                    fitted.bitmap.height,
+                    plain.bitmap.height
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn vertical_hinting_puts_the_x_height_on_a_whole_row() {
+        // Noto Sans's x-height is 536/1000 em: 6.7 px at 12.5 px, so the top
+        // row of an `x` is seven-tenths covered unhinted, and fitted to seven
+        // full rows it is as dark as the row under it.
+        let style = TextStyle::new(LATIN, 12.5);
+        let plain = render(set(), style, "xxxx");
+        let fitted = render_with(set(), style, "xxxx", &hinted());
+        let top = |rendered: &RenderedText| {
+            (0..rendered.bitmap.height)
+                .find(|&row| row_ink(rendered, row) > 0)
+                .unwrap()
+        };
+        let (plain_top, fitted_top) = (top(&plain), top(&fitted));
+        assert_eq!(fitted.baseline_y as usize - fitted_top, 7);
+        let ratio = |rendered: &RenderedText, row: usize| {
+            row_ink(rendered, row) as f32 / row_ink(rendered, row + 1) as f32
+        };
+        assert!(
+            ratio(&fitted, fitted_top) > 0.9,
+            "{}",
+            ratio(&fitted, fitted_top)
+        );
+        assert!(
+            ratio(&plain, plain_top) < 0.8,
+            "{}",
+            ratio(&plain, plain_top)
+        );
+    }
+
+    #[test]
+    fn a_face_without_latin_zones_is_drawn_unhinted() {
+        let style = TextStyle::new(THAI, 15.0);
+        assert_eq!(
+            render_with(set(), style, "ผัดกะเพรา", &hinted()),
+            render(set(), style, "ผัดกะเพรา")
+        );
+    }
+
+    #[test]
+    fn stem_darkening_adds_ink_sideways_only() {
+        let style = TextStyle::new(LATIN, 14.0);
+        let text = "Illinois minimum";
+        let plain = render(set(), style, text);
+        let dark = render_with(
+            set(),
+            style,
+            text,
+            &TextRendering::DEFAULT.with_stem_darkening(1.0),
+        );
+        let ink = |r: &RenderedText| r.bitmap.pixels.iter().map(|&p| u32::from(p)).sum::<u32>();
+        assert!(ink(&dark) as f32 > ink(&plain) as f32 * 1.1);
+        assert_eq!(dark.advance, plain.advance);
+        // Not one row of ink more above or below.
+        let rows = |r: &RenderedText| {
+            let inked: Vec<i32> = (0..r.bitmap.height)
+                .filter(|&row| row_ink(r, row) > 0)
+                .map(|row| row as i32 - r.baseline_y)
+                .collect();
+            (inked[0], inked[inked.len() - 1])
+        };
+        assert_eq!(rows(&dark), rows(&plain));
     }
 }

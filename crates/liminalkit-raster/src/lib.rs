@@ -17,6 +17,7 @@ pub mod bitmap;
 pub mod blend;
 mod blit;
 pub mod color;
+pub mod gamma;
 pub mod icon;
 pub mod image;
 pub mod kernel;

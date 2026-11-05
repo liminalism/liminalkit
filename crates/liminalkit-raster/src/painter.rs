@@ -337,6 +337,57 @@ impl<'a> Painter<'a> {
         }
     }
 
+    /// The opaque colour at a pixel, if it is inside the clip: what text
+    /// drawn there will be blended over. `None` outside the clip, and on a
+    /// premultiplied painter where the pixel is not fully opaque (its final
+    /// colour depends on what it is later composited onto).
+    pub fn backdrop(&self, x: i32, y: i32) -> Option<u32> {
+        if !self.clip.contains(x, y) {
+            return None;
+        }
+        let pixel = self.buffer.pixels[y as usize * self.buffer.width as usize + x as usize];
+        if self.premultiplied && pixel >> 24 != 0xff {
+            return None;
+        }
+        Some(pixel & 0x00ff_ffff)
+    }
+
+    /// [`Painter::blend_coverage_row`] with each coverage byte first put
+    /// through `curve`, a [`crate::gamma`] table: how corrected text lands.
+    pub fn blend_coverage_row_mapped(
+        &mut self,
+        x: i32,
+        y: i32,
+        color: u32,
+        coverage: &[u8],
+        curve: &[u8; 256],
+    ) {
+        if y < self.clip.y || y >= self.clip.bottom() {
+            return;
+        }
+        let start = (self.clip.x - x).max(0);
+        let end = (self.clip.right() - x).min(coverage.len() as i32);
+        if end <= start {
+            return;
+        }
+        let (start, end) = (start as usize, end as usize);
+        let left = y as usize * self.buffer.width as usize + (x + start as i32) as usize;
+        let destination = &mut self.buffer.pixels[left..left + (end - start)];
+        if self.premultiplied {
+            for (pixel, &coverage) in destination.iter_mut().zip(&coverage[start..end]) {
+                *pixel =
+                    crate::blend::blend_premultiplied(*pixel, color, curve[usize::from(coverage)]);
+            }
+        } else {
+            crate::blend::blend_coverage_span_mapped(
+                destination,
+                color,
+                &coverage[start..end],
+                curve,
+            );
+        }
+    }
+
     pub fn fill_rect(&mut self, rect: Rect, color: u32) {
         let color = if self.premultiplied {
             color | 0xff00_0000
@@ -659,6 +710,40 @@ mod tests {
             }
         }
         assert_eq!(by_row.pixels, by_pixel.pixels);
+    }
+
+    #[test]
+    fn a_mapped_row_is_the_plain_row_of_the_mapped_coverage() {
+        // Clipped at both ends and in both pixel formats: the curve is applied
+        // to exactly the coverage the plain row would have blended.
+        let coverage: Vec<u8> = (0..40u16).map(|column| (column * 7 % 256) as u8).collect();
+        let curve = crate::gamma::curve(30, 225, 2.2, 0.5);
+        let mapped: Vec<u8> = coverage.iter().map(|&c| curve[usize::from(c)]).collect();
+        for premultiplied in [false, true] {
+            let mut expected = WindowBuffer::new(48, 3);
+            let mut actual = WindowBuffer::new(48, 3);
+            for start in [-10i32, -1, 0, 3, 40, 47] {
+                let new = |buffer| {
+                    if premultiplied {
+                        Painter::new_premultiplied(buffer)
+                    } else {
+                        Painter::new(buffer)
+                    }
+                };
+                new(&mut expected).blend_coverage_row(start, 1, 0x00ff_8811, &mapped);
+                new(&mut actual).blend_coverage_row_mapped(
+                    start,
+                    1,
+                    0x00ff_8811,
+                    &coverage,
+                    &curve,
+                );
+            }
+            assert_eq!(
+                expected.pixels, actual.pixels,
+                "premultiplied={premultiplied}"
+            );
+        }
     }
 
     #[test]

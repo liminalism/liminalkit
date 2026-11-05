@@ -4,13 +4,20 @@
 //! not changed — many times a second, and reshaping and rasterizing them on
 //! every frame would be pure waste. Entries are keyed by [`TextStyle`] (face,
 //! size, tracking) and string.
+//!
+//! The cache also holds the [`TextRendering`] its strings are rasterized and
+//! drawn with. Changing it with [`TextCache::set_rendering`] drops the
+//! bitmaps only if the rasterization changed; the coverage curves it draws
+//! with are built per text and background lightness and kept.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use liminalkit_raster::gamma::{self, CoverageCurve};
 use liminalkit_raster::{Painter, Rect};
 
 use crate::font::{FontSet, TextStyle};
+use crate::rendering::TextRendering;
 use crate::text::{self, RenderedText};
 
 /// How many rendered strings to keep. A counter screen holds a few dozen
@@ -67,7 +74,16 @@ pub struct TextCache {
     /// frame is wrapped once.
     wrapped: HashMap<(i32, u64), HashMap<Rc<str>, Lines>>,
     wrapped_count: usize,
+    rendering: TextRendering,
+    /// Coverage curves by text and background lightness ([`gamma::luma`]),
+    /// built on first use. A screen uses a handful of pairs; the map is
+    /// cleared if it ever holds [`CURVE_LIMIT`]. Empty when `rendering` does
+    /// not correct coverage.
+    curves: HashMap<(u8, u8), Box<CoverageCurve>>,
 }
+
+/// More text-and-background pairs than any screen draws: 256 KiB of tables.
+const CURVE_LIMIT: usize = 1024;
 
 /// Byte ranges of the lines a string wraps into.
 pub type Lines = Rc<[std::ops::Range<usize>]>;
@@ -104,7 +120,92 @@ impl TextCache {
             fitted_bytes: 0,
             wrapped: HashMap::new(),
             wrapped_count: 0,
+            rendering: TextRendering::default(),
+            curves: HashMap::new(),
         }
+    }
+
+    /// The same cache, rendering with `rendering` instead of the default.
+    pub fn with_rendering(mut self, rendering: TextRendering) -> TextCache {
+        self.set_rendering(rendering);
+        self
+    }
+
+    /// How strings are rasterized and blended from now on.
+    ///
+    /// Rendered bitmaps are dropped only if hinting or stem darkening
+    /// changed; a new gamma or contrast takes effect on the next draw
+    /// without re-rasterizing anything. Measurements never change: neither
+    /// option moves an advance.
+    pub fn set_rendering(&mut self, rendering: TextRendering) {
+        if !rendering.rasterizes_like(&self.rendering) {
+            self.entries.clear();
+            self.entry_count = 0;
+            self.bitmap_bytes = 0;
+        }
+        if rendering.gamma != self.rendering.gamma || rendering.contrast != self.rendering.contrast
+        {
+            self.curves.clear();
+        }
+        self.rendering = rendering;
+    }
+
+    pub fn rendering(&self) -> TextRendering {
+        self.rendering
+    }
+
+    /// The coverage curve for text in `color` drawn over the painter's
+    /// pixels at `area`, or `None` when coverage is drawn uncorrected.
+    ///
+    /// The background is read, not assumed: the opaque pixels at the four
+    /// corners of the string's bitmap, which its padding keeps clear of its
+    /// own ink, give their median lightness. Where none can be read (all
+    /// clipped, or a transparent layer) the text colour's opposite stands in,
+    /// as in Skia.
+    fn curve(&mut self, painter: &Painter<'_>, color: u32, area: Rect) -> Option<CoverageCurve> {
+        if !self.rendering.corrects_coverage() {
+            return None;
+        }
+        let TextRendering {
+            gamma, contrast, ..
+        } = self.rendering;
+        let text = gamma::luma(color, gamma);
+        let mut corners = [0u8; 4];
+        let mut count = 0;
+        // Corners are nearly always one colour; convert each colour once.
+        let mut last: Option<(u32, u8)> = None;
+        for (x, y) in [
+            (area.x, area.y),
+            (area.right() - 1, area.y),
+            (area.x, area.bottom() - 1),
+            (area.right() - 1, area.bottom() - 1),
+        ] {
+            if let Some(pixel) = painter.backdrop(x, y) {
+                let luma = match last {
+                    Some((seen, luma)) if seen == pixel => luma,
+                    _ => gamma::luma(pixel, gamma),
+                };
+                last = Some((pixel, luma));
+                corners[count] = luma;
+                count += 1;
+            }
+        }
+        let corners = &mut corners[..count];
+        corners.sort_unstable();
+        let background = match count {
+            0 => gamma::opposite(text),
+            _ if count % 2 == 1 => corners[count / 2],
+            _ => ((u16::from(corners[count / 2 - 1]) + u16::from(corners[count / 2])) / 2) as u8,
+        };
+        if self.curves.len() >= CURVE_LIMIT {
+            self.curves.clear();
+        }
+        Some(
+            **self
+                .curves
+                .entry((text, background))
+                .or_insert_with(|| Box::new(gamma::curve(text, background, gamma, contrast))),
+        )
     }
 
     /// Line ranges for `text` wrapped into `width` pixels, cached.
@@ -168,7 +269,7 @@ impl TextCache {
             .and_then(|bucket| bucket.get(text))
             .is_none();
         if missing {
-            let rendered = text::render(self.fonts, style, text);
+            let rendered = text::render_with(self.fonts, style, text, &self.rendering);
             let bytes = rendered.bitmap.pixels.capacity();
             if self.entry_count >= self.entry_limit
                 || (self.entry_count > 0
@@ -218,6 +319,16 @@ impl TextCache {
         if text.is_empty() {
             return 0;
         }
+        let (origin_x, width, height) = {
+            let rendered = self.rendered(text, style);
+            (
+                rendered.origin_x,
+                rendered.bitmap.width,
+                rendered.bitmap.height,
+            )
+        };
+        let area = Rect::new(x - origin_x, y, width as i32, height as i32);
+        let curve = self.curve(painter, color, area);
         let rendered = self.rendered(text, style);
         // The bitmap holds a pixel of padding and any ink left of the origin,
         // so the pen position is offset by the recorded origin.
@@ -230,12 +341,13 @@ impl TextCache {
         let bitmap = &rendered.bitmap;
         for row in 0..bitmap.height {
             let start = row * bitmap.width;
-            painter.blend_coverage_row(
-                left,
-                y + row as i32,
-                color,
-                &bitmap.pixels[start..start + bitmap.width],
-            );
+            let coverage = &bitmap.pixels[start..start + bitmap.width];
+            match &curve {
+                Some(curve) => {
+                    painter.blend_coverage_row_mapped(left, y + row as i32, color, coverage, curve)
+                }
+                None => painter.blend_coverage_row(left, y + row as i32, color, coverage),
+            }
         }
         rendered.advance.ceil() as i32
     }
@@ -273,18 +385,28 @@ impl TextCache {
             (0, 1),
             (1, 1),
         ];
+        let (origin_x, width, height) = {
+            let rendered = self.rendered(text, style);
+            (
+                rendered.origin_x,
+                rendered.bitmap.width,
+                rendered.bitmap.height,
+            )
+        };
+        let area = Rect::new(x - origin_x - 1, y - 1, width as i32 + 2, height as i32 + 2);
+        let curve = self.curve(painter, color, area);
         let rendered = self.rendered(text, style);
         let left = x - rendered.origin_x;
         let bitmap = &rendered.bitmap;
         for (dx, dy) in AROUND {
             for row in 0..bitmap.height {
                 let start = row * bitmap.width;
-                painter.blend_coverage_row(
-                    left + dx,
-                    y + row as i32 + dy,
-                    color,
-                    &bitmap.pixels[start..start + bitmap.width],
-                );
+                let coverage = &bitmap.pixels[start..start + bitmap.width];
+                let (x, y) = (left + dx, y + row as i32 + dy);
+                match &curve {
+                    Some(curve) => painter.blend_coverage_row_mapped(x, y, color, coverage, curve),
+                    None => painter.blend_coverage_row(x, y, color, coverage),
+                }
             }
         }
     }
@@ -412,6 +534,7 @@ impl TextCache {
 mod tests {
     use super::*;
     use crate::font::test_fonts::{set, style};
+    use crate::TextRendering;
     use liminalkit_raster::WindowBuffer;
 
     fn cache() -> TextCache {
@@ -599,6 +722,102 @@ mod tests {
             (rightmost as i32) < area.right() + 2,
             "ink reached {rightmost}, past the column at {}",
             area.right()
+        );
+    }
+
+    /// `text` drawn in `color` over a panel of `background`, with `rendering`.
+    fn drawn(rendering: TextRendering, background: u32, color: u32) -> Vec<u32> {
+        let mut buffer = WindowBuffer::new(220, 30);
+        let mut cache = cache().with_rendering(rendering);
+        let mut painter = Painter::new(&mut buffer);
+        painter.clear(background);
+        cache.draw(&mut painter, "Settings minimum", 4, 4, style(15.0), color);
+        buffer.pixels
+    }
+
+    /// How far the pixels moved from the background toward the text colour,
+    /// in sRGB green-channel steps, summed.
+    fn ink_toward(pixels: &[u32], background: u32) -> i64 {
+        let green = |pixel: u32| i64::from((pixel >> 8) & 0xff);
+        pixels
+            .iter()
+            .map(|&pixel| (green(pixel) - green(background)).abs())
+            .sum()
+    }
+
+    #[test]
+    fn coverage_correction_lightens_dark_fringes_and_brightens_light_text() {
+        let (paper, ink) = (0x00f6_f6f4, 0x001c_1c1e);
+        let plain = drawn(TextRendering::UNCORRECTED, paper, ink);
+        let corrected = drawn(TextRendering::DEFAULT, paper, ink);
+        // Nothing the plain blend left alone is touched: the correction
+        // reweights edges and never spreads them.
+        for (&a, &b) in plain.iter().zip(&corrected) {
+            assert!(a != paper || b == paper);
+        }
+        let linear = drawn(TextRendering::DEFAULT.with_gamma(2.2, 0.0), paper, ink);
+        assert!(ink_toward(&linear, paper) < ink_toward(&plain, paper));
+        // Contrast gives dark text back most of its weight.
+        assert!(ink_toward(&corrected, paper) > ink_toward(&linear, paper));
+
+        let (night, chalk) = (0x001c_1c1e, 0x00e8_e8e6);
+        let plain = drawn(TextRendering::UNCORRECTED, night, chalk);
+        let corrected = drawn(TextRendering::DEFAULT, night, chalk);
+        assert!(
+            ink_toward(&corrected, night) as f32 > ink_toward(&plain, night) as f32 * 1.1,
+            "light text on a dark panel should gain weight"
+        );
+    }
+
+    #[test]
+    fn grey_text_is_corrected_against_the_panel_it_is_drawn_on() {
+        // Grey on white. Guessing the background from the text colour alone
+        // would assume mid-grey and correct almost nothing; read from the
+        // buffer it is corrected like black on white.
+        let (paper, grey) = (0x00ff_ffff, 0x006a_6a6a);
+        let plain = ink_toward(&drawn(TextRendering::UNCORRECTED, paper, grey), paper);
+        let linear = TextRendering::DEFAULT.with_gamma(2.2, 0.0);
+        let read = ink_toward(&drawn(linear, paper, grey), paper);
+        assert!((read as f32) < plain as f32 * 0.9, "{read} vs {plain}");
+    }
+
+    #[test]
+    fn changing_only_the_blend_keeps_the_rendered_strings() {
+        let mut cache = cache();
+        cache.measure("Settings", style(15.0));
+        cache.set_rendering(TextRendering::DEFAULT.with_gamma(2.2, 0.0));
+        assert_eq!(cache.len(), 1, "a new gamma re-rasterizes nothing");
+        cache.set_rendering(cache.rendering().with_hinting(crate::Hinting::Vertical));
+        assert_eq!(cache.len(), 0, "hinting changes the bitmaps");
+        let hinted = cache.measure("Settings", style(15.0));
+        assert_eq!(
+            hinted,
+            TextCache::new(set()).measure("Settings", style(15.0))
+        );
+    }
+
+    #[test]
+    fn uncorrected_drawing_is_the_plain_blend() {
+        // The old kernel, byte for byte: what an application that opts out
+        // gets.
+        let rendered = text::render(set(), style(15.0), "Settings minimum");
+        let mut expected = WindowBuffer::new(220, 30);
+        {
+            let mut painter = Painter::new(&mut expected);
+            painter.clear(0x00f6_f6f4);
+            for row in 0..rendered.bitmap.height {
+                let start = row * rendered.bitmap.width;
+                painter.blend_coverage_row(
+                    4 - rendered.origin_x,
+                    4 + row as i32,
+                    0x001c_1c1e,
+                    &rendered.bitmap.pixels[start..start + rendered.bitmap.width],
+                );
+            }
+        }
+        assert_eq!(
+            drawn(TextRendering::UNCORRECTED, 0x00f6_f6f4, 0x001c_1c1e),
+            expected.pixels
         );
     }
 
