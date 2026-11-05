@@ -221,6 +221,43 @@ record pixelkit.work.raster-simd-coverage/1 : work {
         """
 }
 
+record pixelkit.work.text-rendering-quality/1 : work {
+    title "Gamma-corrected text coverage, opt-in vertical hinting and stem darkening"
+    state completed
+    intent """
+        Make small UI text (11 to 17 px, both polarities, scales 1 to 2) crisper
+        and more evenly weighted: correct glyph coverage for the sRGB blend with
+        a per-pair coverage curve (text and background lightness), and offer
+        opt-in vertical grid fitting and horizontal stem darkening through a
+        defaulted TextRendering held by TextCache, so existing callers compile
+        unchanged and TextRendering::UNCORRECTED reproduces the old output.
+        """
+    note """
+        Defaults: gamma 1.8, contrast 0.5, Hinting::None, stem_darkening 0.
+        Vertical hinting measured about 8% less grey at horizontal edges over
+        9-34 px but only 2% at sizes whose x-height is already whole, so it is
+        opt-in. Before/after sheets were rendered outside the repository.
+        """
+    acceptance {
+        check uncorrected-identical {
+            statement """
+                Rendering with TextRendering::UNCORRECTED reproduces the previous toolkit's pixels byte for byte.
+                """
+            method observation
+            verified_by [ @pixelkit.evidence.text-rendering-uncorrected-identical/1 ]
+        }
+        check workspace-tests {
+            statement """
+                The workspace test suite passes, including the curve, mapped-span and rendering-option tests.
+                """
+            method command
+            command "cargo test --workspace"
+            verified_by [ @pixelkit.evidence.text-rendering-tests/1 ]
+        }
+    }
+    author "dk"
+}
+
 record pixelkit.work.text-shaping-fallback/1 : work {
     title "Font fallback across scripts, bidirectional text, and an optional mature shaper behind a feature"
     state proposed

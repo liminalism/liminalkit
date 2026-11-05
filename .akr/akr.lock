@@ -2,10 +2,10 @@ akr-lock 0.1
 project pixelkit
 
 build {
-    tool "akr 0.6.1"
+    tool "akr 0.6.2"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:9fe16d33dafdcad784f232ad5c67ffc45b45ebbd2a58aab6b18ade14337a4f28"
+    source_graph "sha256:f34015ba7f0fbace8844f4b5ea8dd778d727f7316d4decf8a48944217348db20"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/pixelkit/decisions.akr" {
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:2afe229593abc54f5b5e4600af2d01045840428209598a5186c0600d08b4f52f"
-    records 20
+    hash "sha256:91c86215f6520041148f394a6f976346a4377bd17869ad71f430be7126bbf24e"
+    records 22
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
@@ -39,8 +39,8 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:6ce2c161318d67fbe1736118230d84d2d129f503985b1b9da4bf68048fb45d71"
-    records 13
+    hash "sha256:928b712b96eedbb7c157238724cac63dc766725b47c82602facf66646305b6fe"
+    records 14
 }
 
 resolution @pixelkit.decision.bidi-behind-feature/1 {
@@ -256,6 +256,16 @@ seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
     hash "sha256:7be3c4e877ed80d33a38f802bcf894f66e84bdbe475234b7ba532f7a87109d7e"
 }
 
+seal @pixelkit.evidence.text-rendering-tests/1 {
+    state verified
+    hash "sha256:4b173fd904e0518bd0c937c2f29a2bbbf99a95b46f5b2700355f9b6df5725224"
+}
+
+seal @pixelkit.evidence.text-rendering-uncorrected-identical/1 {
+    state verified
+    hash "sha256:6607dab0a505df878bd9334ebca6428fc8ed48e491a18950fa1400cb5b67e642"
+}
+
 seal @pixelkit.evidence.touch-interactions-compile/1 {
     state verified
     hash "sha256:183e10ce1e4dadea73c1fa1f9624309505dc024a4fff781ec5a1055a40920a11"
@@ -369,6 +379,11 @@ seal @pixelkit.work.adoptability-pass/1 {
 seal @pixelkit.work.explicit-interaction-lifecycles/1 {
     state completed
     hash "sha256:61ca9ce1cc76a1817ed296ade25b2fc1c14a65e630781e653771282fb35cd924"
+}
+
+seal @pixelkit.work.text-rendering-quality/1 {
+    state completed
+    hash "sha256:c3a6bee42ab606b681518a78ae24ce27eeebb7218237cbb5d73f7b241d416bec"
 }
 
 seal @pixelkit.work.touch-interactions/1 {

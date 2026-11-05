@@ -190,6 +190,31 @@ record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
         """
 }
 
+record pixelkit.evidence.text-rendering-tests/1 : evidence {
+    title "At the commit: 571 workspace tests passed, 0 failed; cargo test -p liminalkit-text --features bidi 98 passed; accessibility suite 191 passed; LIMINALKIT_SIMD=scalar raster 150 and text 95 passed. Clippy -D warnings is clean for raster, text, ui and the facade; liminalkit-shell's lib-test target trips needless_update at clipboard.rs:225, a file this work does not touch."
+    state verified
+    result pass
+    method command
+    observed_at git:8e79f4e19f385ab7743c2d311a9986edc72e1786
+    command "cargo test --workspace"
+    summary """
+        At the commit: 571 workspace tests passed, 0 failed; cargo test -p liminalkit-text --features bidi 98 passed; accessibility suite 191 passed; LIMINALKIT_SIMD=scalar raster 150 and text 95 passed. Clippy -D warnings is clean for raster, text, ui and the facade; liminalkit-shell's lib-test target trips needless_update at clipboard.rs:225, a file this work does not touch.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.text-rendering-uncorrected-identical/1 : evidence {
+    title "Eight sheets (Inter and Noto Sans, 11-17 px at scales 1, 1.25, 1.5 and 2, light and dark panels) rendered with TextCache under the parent commit 3812aa0 and again with TextRendering::UNCORRECTED at this commit had identical FNV-1a hashes of their pixel buffers. A unit test, uncorrected_drawing_is_the_plain_blend, asserts the same against the plain row blend."
+    state verified
+    result pass
+    method observation
+    observed_at git:8e79f4e19f385ab7743c2d311a9986edc72e1786
+    summary """
+        Eight sheets (Inter and Noto Sans, 11-17 px at scales 1, 1.25, 1.5 and 2, light and dark panels) rendered with TextCache under the parent commit 3812aa0 and again with TextRendering::UNCORRECTED at this commit had identical FNV-1a hashes of their pixel buffers. A unit test, uncorrected_drawing_is_the_plain_blend, asserts the same against the plain row blend.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.touch-interactions-compile/1 : evidence {
     title "The current working tree compiles across all workspace targets and features, including the original gesture, scroll_physics and touch_replay modules, touch_tuning example, and twelve new regression cases. Formatting and diff whitespace checks pass. No new behavioral tests were executed and no interactive or hardware validation was performed; gesture correctness, replay behavior, frame-partition invariance, physical latency and touch feel remain UNTESTED. Source docs, README, window title/banner and startup message label that status."
     state verified
