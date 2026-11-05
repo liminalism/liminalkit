@@ -262,6 +262,19 @@ record pixelkit.evidence.windowing-tests/1 : evidence {
         """
 }
 
+record pixelkit.evidence.windows-clipboard/1 : evidence {
+    title "Windows 11 Pro 10.0.26300 x86_64, rustc 1.99.0, uncommitted change on b74d61c (branch windows-clipboard): liminalkit-shell clipboard tests 8 passed, including windows_text_round_trips_through_the_system_board, which wrote non-ASCII text to the real Win32 clipboard through arboard, read it back equal, restored the previous text, and saw set_image_rgba report failure. Clippy -D warnings and fmt --check were clean. Downstream, TemplarTorrent's paste_magnet_from_the_system_clipboard test (Ctrl+V in the Add dialog through ClipboardWorker) passed against this path."
+    state verified
+    result pass
+    method command
+    observed_at git:b74d61ca727ab1560c946fbdcd3b99d7a2a97946
+    command "cargo test -p liminalkit-shell --lib clipboard; cargo clippy -p liminalkit-shell --all-targets -- -D warnings"
+    summary """
+        Windows 11 Pro 10.0.26300 x86_64, rustc 1.99.0, uncommitted change on b74d61c (branch windows-clipboard): liminalkit-shell clipboard tests 8 passed, including windows_text_round_trips_through_the_system_board, which wrote non-ASCII text to the real Win32 clipboard through arboard, read it back equal, restored the previous text, and saw set_image_rgba report failure. Clippy -D warnings and fmt --check were clean. Downstream, TemplarTorrent's paste_magnet_from_the_system_clipboard test (Ctrl+V in the Add dialog through ClipboardWorker) passed against this path.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.workspace-lint-and-docs-clean/1 : evidence {
     title "Clippy and rustdoc clean for the whole workspace"
     state verified

@@ -3,6 +3,9 @@
 //!
 //! macOS uses NSPasteboard. Linux uses real X11 selections or Wayland
 //! data-control via arboard, retaining the owner for the handle's lifetime.
+//! Windows uses the Win32 clipboard (CF_UNICODETEXT) through arboard's
+//! clipboard-win backend, which opens and closes the board per operation;
+//! text only there, an image write reports that it is not implemented.
 //! A compositor without data-control reports unavailable; this does not claim
 //! to implement seat/serial-based wl_data_device access on such compositors.
 //! There is no successful process-local production fallback.
@@ -26,7 +29,7 @@ type FakeImage = std::sync::Arc<std::sync::Mutex<Option<(u32, u32, Vec<u8>)>>>;
 
 #[derive(Clone)]
 pub struct Clipboard {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     native: std::sync::Arc<std::sync::Mutex<Option<arboard::Clipboard>>>,
     #[cfg(test)]
     fake: Option<std::sync::Arc<std::sync::Mutex<Option<String>>>>,
@@ -45,7 +48,7 @@ impl Default for Clipboard {
     // target and on `cfg(test)`, and the derive's output would vary with them.
     fn default() -> Self {
         Self {
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
             native: Default::default(),
             #[cfg(test)]
             fake: None,
@@ -76,7 +79,7 @@ impl Clipboard {
                 .map_err(|_| ClipboardError("test clipboard failed".into()))? = Some(text);
             return Ok(());
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
         return self.with_native(|clipboard| clipboard.set_text(text));
         #[cfg(target_os = "macos")]
         return if macos::set(&text) {
@@ -84,7 +87,7 @@ impl Clipboard {
         } else {
             Err(ClipboardError("pasteboard unavailable".into()))
         };
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = text;
             Err(ClipboardError(
@@ -106,7 +109,7 @@ impl Clipboard {
                 .map_err(|_| ClipboardError("test clipboard failed".into()))?
                 .clone());
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
         {
             self.with_native(|clipboard| match clipboard.get_text() {
                 Ok(text) => Ok(Some(text)),
@@ -116,7 +119,7 @@ impl Clipboard {
         }
         #[cfg(target_os = "macos")]
         return Ok(macos::get());
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         Err(ClipboardError(
             "system clipboard unavailable on this platform".into(),
         ))
@@ -158,7 +161,14 @@ impl Clipboard {
         } else {
             Err(ClipboardError("pasteboard unavailable".into()))
         };
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(target_os = "windows")]
+        {
+            let _ = (width, height, rgba);
+            Err(ClipboardError(
+                "image copy is not implemented on Windows; text is".into(),
+            ))
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = (width, height, rgba);
             Err(ClipboardError(
@@ -186,20 +196,20 @@ impl Clipboard {
                 .map_err(|_| ClipboardError("test clipboard failed".into()))? = None;
             return Ok(());
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
         return self.with_native(|clipboard| clipboard.clear());
         #[cfg(target_os = "macos")]
         {
             macos::clear();
             Ok(())
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         Err(ClipboardError(
             "system clipboard unavailable on this platform".into(),
         ))
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     fn with_native<T>(
         &self,
         operation: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>,
@@ -509,6 +519,35 @@ mod tests {
     /// a Mac `cargo test` first if it drifts again. No assertion on the
     /// outcome: without window-server access the board fails closed
     /// (`false`), which is the documented contract, not a failure.
+    /// Text written through the Win32 board reads back, including non-ASCII
+    /// (CF_UNICODETEXT is UTF-16). The user's clipboard text is restored, or
+    /// the board cleared when it held none.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_text_round_trips_through_the_system_board() {
+        let _guard = LOCK.lock().unwrap();
+        let mut clipboard = Clipboard::new();
+        let previous = clipboard.try_text().expect("read the Windows clipboard");
+        let marker = format!("liminalkit-é-✓-{}", std::process::id());
+        clipboard
+            .try_set_text(marker.clone())
+            .expect("write the Windows clipboard");
+        let read = clipboard.try_text();
+        match previous {
+            Some(text) => {
+                let _ = clipboard.try_set_text(text);
+            }
+            None => {
+                let _ = clipboard.try_clear();
+            }
+        }
+        assert_eq!(read.expect("read back").as_deref(), Some(marker.as_str()));
+        assert!(
+            !clipboard.set_image_rgba(1, 1, vec![0, 0, 0, 255]),
+            "image copy reports failure on Windows instead of pretending"
+        );
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_image_write_compiles_against_the_system_board() {

@@ -45,6 +45,11 @@ than the one it was extracted from can pick up.
 
 ### Added
 
+- The system clipboard works on Windows: `Clipboard` text read, write and
+  clear go through the Win32 clipboard (CF_UNICODETEXT) via arboard's
+  clipboard-win backend, so Ctrl+V in a `TextFieldState` with an attached
+  `ClipboardWorker` pastes there as it does on Linux and macOS. Image copy
+  on Windows returns an error that says it is not implemented.
 - Text rendering options, `liminalkit_text::TextRendering`, held by the
   `TextCache` (`with_rendering`, `set_rendering`, `rendering`): coverage
   corrected for the sRGB blend against the background each string is drawn
