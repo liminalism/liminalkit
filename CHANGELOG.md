@@ -45,6 +45,11 @@ than the one it was extracted from can pick up.
 
 ### Added
 
+- A table cell can show a colour rather than name it:
+  `Cell::swatch(text, fill)` (`CellAppearance::Swatch`) draws a small square
+  of `fill` at the cell's leading edge and the text after it, and
+  `Ui::swatch` draws the same outside a table. A `match` over
+  `CellAppearance` needs the new arm.
 - The system clipboard works on Windows: `Clipboard` text read, write and
   clear go through the Win32 clipboard (CF_UNICODETEXT) via arboard's
   clipboard-win backend, so Ctrl+V in a `TextFieldState` with an attached

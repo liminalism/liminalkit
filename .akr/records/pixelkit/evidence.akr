@@ -190,6 +190,19 @@ record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
         """
 }
 
+record pixelkit.evidence.table-swatch-cell-20261106/1 : evidence {
+    title "Cell::swatch / CellAppearance::Swatch / Ui::swatch: a small square of the fill at the cell's leading edge, text after it. New test a_swatch_cell_shows_its_colour_before_its_text; liminalkit-ui 179 + 1 pass; fmt clean. First user: the salon Mac staff list, which dropped its Color column of colour names."
+    state verified
+    result pass
+    method command
+    observed_at git:f0ea79ca2e3cbe44495e4d6ca38dd6245df602d1
+    command "cargo test -p liminalkit-ui; cargo fmt --all -- --check"
+    summary """
+        Cell::swatch / CellAppearance::Swatch / Ui::swatch: a small square of the fill at the cell's leading edge, text after it. New test a_swatch_cell_shows_its_colour_before_its_text; liminalkit-ui 179 + 1 pass; fmt clean. First user: the salon Mac staff list, which dropped its Color column of colour names.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.text-rendering-tests/1 : evidence {
     title "At the commit: 571 workspace tests passed, 0 failed; cargo test -p liminalkit-text --features bidi 98 passed; accessibility suite 191 passed; LIMINALKIT_SIMD=scalar raster 150 and text 95 passed. Clippy -D warnings is clean for raster, text, ui and the facade; liminalkit-shell's lib-test target trips needless_update at clipboard.rs:225, a file this work does not touch."
     state verified

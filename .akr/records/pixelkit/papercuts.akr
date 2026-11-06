@@ -93,6 +93,18 @@ record pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 : paper
     created_at 2026-09-24
 }
 
+record pixelkit.papercut.on-windows-with-core-autocrlf-true-akr-akr-lock/1 : papercut {
+    title "On Windows with core.autocrlf=true, .akr/akr.lock and…"
+    state verified
+    statement """
+        On Windows with core.autocrlf=true, .akr/akr.lock and records/pixelkit/work.akr checked out CRLF; akr reads LF only, so check reported 210 AKR-P003 errors and build could not seal new records. Fixed with .gitattributes eol=lf for /.akr/** and /docs/generated/**.
+        """
+    observed_at git:f0ea79ca2e3cbe44495e4d6ca38dd6245df602d1
+    about "git"
+    author "claude"
+    created_at 2026-11-06
+}
+
 record pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 : papercut {
     title "Recording the sibling formatting result failed because the retained…"
     state verified

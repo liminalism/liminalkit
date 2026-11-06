@@ -1,0 +1,3 @@
+# AKR reads LF only; keep the ledger LF on every checkout, Windows included.
+/.akr/** text eol=lf
+/docs/generated/** text eol=lf

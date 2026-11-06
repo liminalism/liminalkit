@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.2"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:f34015ba7f0fbace8844f4b5ea8dd778d727f7316d4decf8a48944217348db20"
+    source_graph "sha256:f21a01db8a601f25ac54a2d62b6772005f5d05077a11f810b944bbfaeddfe1de"
 }
 
 source ".akr/project.akr" {
@@ -19,13 +19,13 @@ source ".akr/records/pixelkit/decisions.akr" {
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:91c86215f6520041148f394a6f976346a4377bd17869ad71f430be7126bbf24e"
-    records 22
+    hash "sha256:eeec5ac81f97c6c459bea644bafb5bfddd90161b4a40225374245343cb0e8502"
+    records 24
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
-    hash "sha256:45f20dc826dc4cd77709a16ee8094e7cf1849119f48154b9b058b511f31fa4f6"
-    records 15
+    hash "sha256:0fcd9826f795fb26f539c734444e1a7f4ca4d127f13797bf5d491e76770e719e"
+    records 16
 }
 
 source ".akr/records/pixelkit/policies.akr" {
@@ -256,6 +256,11 @@ seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
     hash "sha256:7be3c4e877ed80d33a38f802bcf894f66e84bdbe475234b7ba532f7a87109d7e"
 }
 
+seal @pixelkit.evidence.table-swatch-cell-20261106/1 {
+    state verified
+    hash "sha256:6fdfe6c46262e6a4686a92123f14cc2ade843493d60e2041666a0f1bd371185d"
+}
+
 seal @pixelkit.evidence.text-rendering-tests/1 {
     state verified
     hash "sha256:4b173fd904e0518bd0c937c2f29a2bbbf99a95b46f5b2700355f9b6df5725224"
@@ -284,6 +289,11 @@ seal @pixelkit.evidence.windowing-live/1 {
 seal @pixelkit.evidence.windowing-tests/1 {
     state verified
     hash "sha256:e4093c7277ffed9e41a58c0a874a0613cd287a42e0992b9a4a15772499f82b4d"
+}
+
+seal @pixelkit.evidence.windows-clipboard/1 {
+    state verified
+    hash "sha256:6b00b528c5a25f1623b2af564808e84712f0caf0aa73b95d2dbaa107cc88147f"
 }
 
 seal @pixelkit.evidence.workspace-lint-and-docs-clean/1 {
@@ -329,6 +339,11 @@ seal @pixelkit.papercut.during-an-interaction-state-audit-knowledge/1 {
 seal @pixelkit.papercut.during-the-first-pixelkit-planning-lookup-akr/1 {
     state verified
     hash "sha256:e968eba153f8a82e41bc3f364b402ae7bbd305e61633d951576931bff9036d18"
+}
+
+seal @pixelkit.papercut.on-windows-with-core-autocrlf-true-akr-akr-lock/1 {
+    state verified
+    hash "sha256:6a41fc7e97915d1d70061adb5da5a6ab14573f3f267b6652c0984317a4afe732"
 }
 
 seal @pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 {

@@ -413,6 +413,17 @@ impl<'a> Ui<'a> {
         self.label(badge.inset(self.px(4)), label, text, Align::Centre);
     }
 
+    /// `label` after a small square of `fill`, the square at the leading
+    /// edge of `area` whatever the alignment, so a column of them lines up.
+    pub fn swatch(&mut self, area: Rect, label: &str, text: u32, fill: u32, align: Align) {
+        let side = self.px(10);
+        let square = Rect::new(area.x, area.y + (area.h - side) / 2, side, side);
+        self.painter.fill_rounded_rect(square, self.px(2), fill);
+        let gap = side + self.px(8);
+        let rest = Rect::new(area.x + gap, area.y, (area.w - gap).max(0), area.h);
+        self.label(rest, label, text, align);
+    }
+
     /// A labelled progress meter. The track and label are drawn without an
     /// off-screen layer; callers can put exact quantities in `label`.
     pub fn meter(&mut self, area: Rect, fraction: f64, label: &str, colour: u32) {
@@ -517,8 +528,19 @@ impl Column {
 #[derive(Debug, Clone, Copy)]
 pub enum CellAppearance {
     Text,
-    Badge { fill: u32, edge: u32 },
-    Meter { fraction: f64, fill: u32 },
+    Badge {
+        fill: u32,
+        edge: u32,
+    },
+    Meter {
+        fraction: f64,
+        fill: u32,
+    },
+    /// A small square of `fill` before the text: a colour shown rather
+    /// than named, such as the colour a person or a category wears.
+    Swatch {
+        fill: u32,
+    },
 }
 
 /// One cell's text and, where it matters, its colour or compact visual.
@@ -551,6 +573,15 @@ impl<'a> Cell<'a> {
             text: text.into(),
             colour: Some(colour),
             appearance: CellAppearance::Badge { fill, edge },
+        }
+    }
+
+    /// `text` after a small square of `fill`.
+    pub fn swatch(text: impl Into<Cow<'a, str>>, fill: u32) -> Cell<'a> {
+        Cell {
+            text: text.into(),
+            colour: None,
+            appearance: CellAppearance::Swatch { fill },
         }
     }
 
@@ -851,6 +882,9 @@ impl<'a> Ui<'a> {
                     }
                     CellAppearance::Meter { fraction, fill } => {
                         self.meter(bounds, fraction, &cell.text, fill);
+                    }
+                    CellAppearance::Swatch { fill } => {
+                        self.swatch(bounds, &cell.text, colour, fill, column.align);
                     }
                 }
                 x += width + column_gap;
@@ -2743,6 +2777,53 @@ mod table_tests {
         let below = (area.bottom() as usize..400)
             .any(|y| (0..400).any(|x| buffer.pixels[y * 400 + x] != 0));
         assert!(!below, "the table drew past its own bottom edge");
+    }
+}
+
+#[cfg(test)]
+mod swatch_tests {
+    use super::*;
+    use liminalkit_raster::WindowBuffer;
+    use liminalkit_test_fonts::set;
+
+    /// A swatch cell paints its colour as a square at the cell's leading
+    /// edge, and its text after it rather than over it.
+    #[test]
+    fn a_swatch_cell_shows_its_colour_before_its_text() {
+        const RED: u32 = 0x00d0_1010;
+        let mut buffer = WindowBuffer::new(400, 120);
+        let mut text = TextCache::new(set());
+        let mut kernel = RasterKernel::new();
+        let mut input = Input::new();
+        let mut state = TableState::new();
+        let area = Rect::new(0, 0, 400, 120);
+        {
+            let mut ui = Ui::new(
+                Painter::new(&mut buffer),
+                &mut text,
+                &mut input,
+                Theme::default(),
+                Scale::ONE,
+                &mut kernel,
+            );
+            let columns = [Column::flex("name", 1, Align::Left)];
+            ui.table(&mut state, area, &columns, &["a".to_owned()], |_| Row {
+                cells: vec![Cell::swatch("นิด", RED)],
+            });
+        }
+        let red: Vec<(usize, usize)> = (0..120)
+            .flat_map(|y| (0..400).map(move |x| (x, y)))
+            .filter(|&(x, y)| buffer.pixels[y * 400 + x] == RED)
+            .collect();
+        assert!(!red.is_empty(), "no square in the swatch's colour");
+        let right = red.iter().map(|&(x, _)| x).max().unwrap();
+        let left = red.iter().map(|&(x, _)| x).min().unwrap();
+        assert!(right - left < 12, "the square is small: {left}..={right}");
+        // The text starts after the square: no red pixel lies right of it.
+        assert!(
+            right < 40,
+            "the square sits at the leading edge, at {right}"
+        );
     }
 }
 
