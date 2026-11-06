@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.2"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:f34015ba7f0fbace8844f4b5ea8dd778d727f7316d4decf8a48944217348db20"
+    source_graph "sha256:7c12c7a58b19ac4b3de9a7d9a17eb4752271fd26dc705e6a2b01448df41af6c9"
 }
 
 source ".akr/project.akr" {
@@ -14,18 +14,18 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/decisions.akr" {
-    hash "sha256:af0deef8fc62f6b90a416fc56049c19d8b6e8d914cd102fd08ddac0572b93356"
-    records 6
+    hash "sha256:9bedeceeebcc4591e8d7b9768e106497a1776bb897fc66be4805d21bf9d4286c"
+    records 7
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:91c86215f6520041148f394a6f976346a4377bd17869ad71f430be7126bbf24e"
-    records 22
+    hash "sha256:cadbf6572c5cab63ee298d4cf58eebcfca8305fc699cb6b978f35f1d5f779a75"
+    records 26
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
-    hash "sha256:45f20dc826dc4cd77709a16ee8094e7cf1849119f48154b9b058b511f31fa4f6"
-    records 15
+    hash "sha256:e6d002c9b1b9691566c5761e071db5c0a9e61b79c716818ced476653da061e07"
+    records 17
 }
 
 source ".akr/records/pixelkit/policies.akr" {
@@ -34,12 +34,12 @@ source ".akr/records/pixelkit/policies.akr" {
 }
 
 source ".akr/records/pixelkit/questions.akr" {
-    hash "sha256:27e5f0e2c88fa63ce3c8b61d6b0164b38349843f766bf1be5f5d63e1822c9305"
-    records 1
+    hash "sha256:512bc70d730d165cd9ace29166c2041ce5c3e187061afa81908e8a9ae57ba979"
+    records 2
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:928b712b96eedbb7c157238724cac63dc766725b47c82602facf66646305b6fe"
+    hash "sha256:7d51b5a7c286e5a712cee46e3b22228a0b59b1c806fc299e103d0afe8d66d6e8"
     records 14
 }
 
@@ -59,6 +59,18 @@ resolution @pixelkit.decision.device-pixel-rects/1 {
     slot implements
     to @pixelkit.policy.explicit-state-toolkit/1
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.direct-presentation-and-damage/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.direct-presentation-and-damage/1 {
+    slot supported_by
+    to @pixelkit.evidence.present-copy-and-partial-repaint-bench/1
+    hash "sha256:3dcb384abf49063700c0684734617dea92a7fcd05b5d5f942a48c55927f89995"
 }
 
 resolution @pixelkit.decision.facade-crate-and-app-adapter/1 {
@@ -83,6 +95,12 @@ resolution @pixelkit.decision.versioning-method/1 {
     slot implements
     to @pixelkit.policy.explicit-state-toolkit/1
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.question.damage-granularity/1 {
+    slot derived_from
+    to @pixelkit.decision.direct-presentation-and-damage/1
+    hash "sha256:a34d9a3db6a009905f389bb5f0cee869670a658c786db8d1d7e7729b0743dccd"
 }
 
 resolution @pixelkit.question.publish-readiness/1 {
@@ -148,7 +166,7 @@ resolution @pixelkit.work.public-docs/1 {
 resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.performance-comparison/1
-    hash "sha256:5d6f8a8643beaafcb34d78f53470d0f780c9f24a59504e3aa9e4b6e62a6df6e2"
+    hash "sha256:bc22c4902e2d9bd841a6bddf6681f998d2c21b3ec3d00484e80c5d7ee29773f1"
 }
 
 resolution @pixelkit.work.publish-packaging/1 {
@@ -216,6 +234,11 @@ seal @pixelkit.evidence.crate-package-contents/1 {
     hash "sha256:3ad04548d7cae62e5efa2899ad5d84ba0ff3d2ef17f821e3c37c334ebd7c5617"
 }
 
+seal @pixelkit.evidence.direct-presentation-tests/1 {
+    state verified
+    hash "sha256:3141c6532ffde22157ee96320a85cedfa1287afd216f4810c43d3e134bd537db"
+}
+
 seal @pixelkit.evidence.fonts-out-of-package-and-tests/1 {
     state verified
     hash "sha256:4b9ec63b0e80f9bd8c7f7d8a29ac73946a83f04970e84dae76db8d30b074eafb"
@@ -252,8 +275,18 @@ seal @pixelkit.evidence.interaction-lifecycle-state-review/1 {
 }
 
 seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
+    state superseded
+    hash "sha256:93ac783521f327c436932d7a84036de0237f88bba8437fdc57a1945cde3ddf4a"
+}
+
+seal @pixelkit.evidence.legeos-workspace-format-20261009/2 {
     state verified
-    hash "sha256:7be3c4e877ed80d33a38f802bcf894f66e84bdbe475234b7ba532f7a87109d7e"
+    hash "sha256:bf4671bc62566b331868ce898edea30a6cdf4eb9b733e85685721dd2ff286ecd"
+}
+
+seal @pixelkit.evidence.present-copy-and-partial-repaint-bench/1 {
+    state verified
+    hash "sha256:3dcb384abf49063700c0684734617dea92a7fcd05b5d5f942a48c55927f89995"
 }
 
 seal @pixelkit.evidence.text-rendering-tests/1 {
@@ -286,6 +319,11 @@ seal @pixelkit.evidence.windowing-tests/1 {
     hash "sha256:e4093c7277ffed9e41a58c0a874a0613cd287a42e0992b9a4a15772499f82b4d"
 }
 
+seal @pixelkit.evidence.windows-clipboard/1 {
+    state verified
+    hash "sha256:6b00b528c5a25f1623b2af564808e84712f0caf0aa73b95d2dbaa107cc88147f"
+}
+
 seal @pixelkit.evidence.workspace-lint-and-docs-clean/1 {
     state verified
     hash "sha256:47d1305b38903083b0c6432c17d05320417d5991ffca8c845466b7b0d5606646"
@@ -299,6 +337,11 @@ seal @pixelkit.papercut.a-standalone-audit-harness-importing-the-kms/1 {
 seal @pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 {
     state verified
     hash "sha256:2ca083acc8b283058bd4767ec1f8b37f1b661ed3a5672bfe158a2a3d1d213a28"
+}
+
+seal @pixelkit.papercut.akr-start-refused-to-orient-the-task-because/1 {
+    state verified
+    hash "sha256:40d253a6aa860ebbb1d57f70d192d2062f36da895c3e36332d77d495ae35ba37"
 }
 
 seal @pixelkit.papercut.building-docs-with-rustdocflags-d-warnings/1 {
@@ -364,6 +407,16 @@ seal @pixelkit.papercut.the-new-touch-example-initially-passed-run-app/1 {
 seal @pixelkit.papercut.the-readme-said-the-gallery-example-writes/1 {
     state verified
     hash "sha256:fd10c02adf804be076d7f875484c333b412c6de8104b59f203baa82699d16e3d"
+}
+
+seal @pixelkit.papercut.the-workspace-forbids-unsafe-so-frame-bench/1 {
+    state verified
+    hash "sha256:5d27174617c1ee4a8947f04aea6fbc00992d4f48b295d485ee2b054b6f589e18"
+}
+
+seal @pixelkit.question.damage-granularity/1 {
+    state open
+    hash "sha256:cf4abddd9bd72583aa9e5e0b12ca9d4b25c3db0dbbaba3dbbd57f17ebb644f6d"
 }
 
 seal @pixelkit.question.publish-readiness/1 {

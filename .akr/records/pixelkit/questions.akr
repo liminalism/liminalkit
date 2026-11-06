@@ -1,6 +1,28 @@
 akr 0.1
 project pixelkit
 
+record pixelkit.question.damage-granularity/1 : question {
+    title "Should damage be a list of rectangles rather than one bounding rectangle?"
+    state open
+    scope [
+        path "crates/liminalkit-raster/src/painter.rs",
+        path "crates/liminalkit-windowing/src/present.rs"
+    ]
+    question """
+        WindowBuffer::damage is one bounding rectangle. A screen whose clock sits top-left and whose status line sits bottom-right presents the whole frame when both change in one frame, which is no worse than before but leaves the bandwidth gain on the table for exactly the kiosk screens this is for. Is a short fixed list of rectangles (merging the pair with the least wasted area when full) worth the extra code in the painter's hot write paths, or does a screen that cares get the same result by drawing its two regions as two frames? Decide from a measured screen on a Pi, not from the bench: present_with_damage on Wayland and the region copy on KMS are where a list would pay, and neither can be measured headless.
+        """
+    derived_from [ @pixelkit.decision.direct-presentation-and-damage ]
+    author "Claude"
+    source {
+        kind external
+        role rationale
+        document "rune-comparison-2026-11-06"
+        use """
+            The bandwidth argument for partial presentation on an embedded machine, which a bounding rectangle only partly collects.
+            """
+    }
+}
+
 record pixelkit.question.publish-readiness/1 : question {
     title "What has to be true before liminalkit is published as an experimental 0.1?"
     state open

@@ -88,6 +88,19 @@ record pixelkit.evidence.crate-package-contents/1 : evidence {
     author "dk"
 }
 
+record pixelkit.evidence.direct-presentation-tests/1 : evidence {
+    title "Workspace tests, lints, docs and formatting pass after the direct-presentation and damage change"
+    state verified
+    result pass
+    method command
+    observed_at git:9396e3f66c9da7af83acd688c76c779f3229d9f4
+    command "cargo test --workspace && cargo test -p liminalkit -p liminalkit-ui --features liminalkit/accessibility,liminalkit-ui/accessibility && cargo clippy --workspace --all-targets && RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --no-deps && cargo fmt --all --check"
+    summary """
+        575 tests pass across the workspace and 191 with the accessibility feature, including the new ones: stale-from-age and damage-rectangle tests on SoftbufferPresenter, a region copy test for all four KMS rotations on aligned and misaligned scan-out memory that checks every copied pixel is the right one and the straight copies are exact, and the host's presenter-resize retry against the new Presenter signature. Clippy, rustdoc with warnings denied, and fmt are clean. Not exercised: a real window (no display in the sandbox), so the buffer-age path on each backend is covered by the unit test of the derivation and by reading softbuffer 0.4.8's backends, not by running them.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.fonts-out-of-package-and-tests/1 : evidence {
     title "Fonts absent from the text crate's package; every test configuration passes at 0.5.0"
     state verified
@@ -179,7 +192,7 @@ record pixelkit.evidence.interaction-lifecycle-state-review/1 : evidence {
 
 record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
     title "The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
@@ -188,6 +201,34 @@ record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
     summary """
         The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed.
         """
+}
+
+record pixelkit.evidence.legeos-workspace-format-20261009/2 : evidence {
+    title "The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed."
+    state verified
+    result pass
+    method command
+    observed_at git:614c9c6e84ce3cd0bc6c81988f636b493b30a497
+    command "cargo fmt --all -- --check (from sibling LegeOS workspace)"
+    summary """
+        The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed.
+        The scratch artefact is no longer cited; it was removed with the disposable scratch entry.
+        """
+    supersedes [ @pixelkit.evidence.legeos-workspace-format-20261009/1 ]
+    author "Claude"
+}
+
+record pixelkit.evidence.present-copy-and-partial-repaint-bench/1 : evidence {
+    title "frame_bench: the present copy was a fifth of every frame; one changed row repaints in 2-3% of the time; fresh text, not eviction, is what a churning cache costs"
+    state verified
+    result pass
+    method command
+    observed_at git:9396e3f66c9da7af83acd688c76c779f3229d9f4
+    command "cargo run --release -p liminalkit --example frame_bench -- 40"
+    summary """
+        Headless, x86_64 Linux sandbox, release profile, 40 frames per row. Full redraw p50 / present copy / partial repaint of one changed table row (share of the buffer repainted): 1280x720 1x 1.45 / 0.24 / 0.07 ms (2.9%); 1920x1080 1x 2.94 / 0.57 / 0.09 ms (2.2%); 1920x1080 1.5x 3.24 / 0.62 / 0.12 ms (2.9%); 2560x1440 1.5x 5.78 / 1.12 / 0.14 ms (2.4%); 3840x2160 2x 11.26 / 2.36 / 0.19 ms (2.2%). The copy column is one whole-buffer copy_from_slice, which is what the desktop host paid on every present before this commit and no longer does; it was a fifth of a full frame at every size. Cold first frames 12.6 to 48.3 ms; resident 11 to 85 MiB, growing with the buffers the bench itself holds. Text cache after the screen: 529 entries and 4.0 MiB of bitmaps against the 4096-entry, 48 MiB defaults, 529 misses in 121,018 lookups, no evictions. A feed of 200 never-seen strings a frame at 1080p costs p50 49.6 ms with the default limits (1 eviction, 20.9 MiB held), 49.2 ms with 1024 entries and 16 MiB (7 evictions, 4.4 MiB held) and 48.6 ms with 256 entries and 4 MiB (31 evictions, 0.3 MiB held): rasterizing new text is the cost, and wholesale eviction adds nothing measurable even at thirty-one evictions in forty frames, so the eviction policy stays and the limits are a memory choice, not a speed one. The sandbox's absolute numbers are not a target machine's; the ratios are what this record is for.
+        """
+    author "dk"
 }
 
 record pixelkit.evidence.text-rendering-tests/1 : evidence {

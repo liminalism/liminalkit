@@ -58,6 +58,42 @@ record pixelkit.decision.device-pixel-rects/1 : decision {
     }
 }
 
+record pixelkit.decision.direct-presentation-and-damage/1 : decision {
+    title "The rasterizer draws into the presenter's memory, and the clip is the dirty region: stale in, damage out, no retained invalidation state"
+    state proposed
+    scope [
+        path "crates/liminalkit-kms/src/display.rs",
+        path "crates/liminalkit-kms/src/host.rs",
+        path "crates/liminalkit-kms/src/rotate.rs",
+        path "crates/liminalkit-raster/src/painter.rs",
+        path "crates/liminalkit-shell/src/present.rs",
+        path "crates/liminalkit-windowing/src/host.rs",
+        path "crates/liminalkit-windowing/src/present.rs",
+        path "crates/liminalkit/src/app.rs"
+    ]
+    topic presentation
+    decision """
+        The rasterizer draws into the presenter's own memory, and the buffer carries the two rectangles that let a frame repaint only what changed. WindowBuffer<'a> holds Pixels<'a>, its own Vec or a slice lent for one frame; Painter borrows the buffer's pieces (pixels, size, damage) so one lifetime serves both and Painter::new is unchanged. Presenter::present(&mut self, paint: &mut dyn FnMut(&mut WindowBuffer<'_>)) lends the surface memory to the application and shows what was painted; SoftbufferPresenter lends softbuffer's buffer directly, so the desktop host makes no copy. Going in, WindowBuffer::stale is the part of the buffer that does not hold the application's previous frame: SoftbufferPresenter derives it from softbuffer's buffer age and a short history of presented damage (age 0: everything; age 1: nothing; age n: the union of the last n-1 frames' damage), which is what makes it right on X11 (age 1), Windows (age 1), Wayland (two buffers, age 2) and macOS (age 0, a fresh buffer each frame). Coming out, WindowBuffer::damage is the union of every write, recorded by the painter after clipping at its six write points, so it is exact and the application never states what it touched. A frame that knows what changed pushes one clip, stale.union(changed), and draws as usual; controls outside the clip still run and answer. The host presents the damage and nothing else (present_with_damage on the desktop; the only region copied to scan-out on KMS, union the previous frame's damage because the dumb buffer written is the one shown two flips ago). Under App, Context::stale carries the same rectangle to a Screen. The KMS host keeps its own buffer and does not lend scan-out memory.
+        """
+    context """
+        The 2026-11-06 outside comparison with Rune named the whole-frame copy into softbuffer's surface as liminalkit's first avoidable cost (7.9 MiB a frame at 1080p, 475 MiB/s at 60 Hz, four times that at 4K) and asked for an optional dirty-region contract that keeps rectangles valid through drawing and presentation without retained widget state. frame_bench measured the copy at 0.57 ms of a 2.94 ms frame at 1080p and 2.36 ms of 11.26 ms at 4K (pixelkit.evidence.present-copy-and-partial-repaint-bench). The simplest shape that met both asks was found by asking what the painter already knows: every write goes through the clip, so the clip is the invalidation region and the clipped writes are the damage. No invalidation API, no rectangle list the application maintains, and no change to how controls are written.
+        """
+    consequences """
+        Breaking for 0.5.0: Presenter::present's signature, and WindowBuffer's lifetime parameter with pixels as Pixels<'a> rather than Vec<u32> (indexing, iteration, fill and copy_from_slice unchanged; owning fields name WindowBuffer<'static>). Damage is one bounding rectangle, not a list: two small changes in opposite corners present the whole frame, which is what happened before and so is never a regression; a list is an open question (pixelkit.question.damage-granularity). The scan-out buffer is not lent on KMS because dumb buffers are write-combined and uncached and blending reads back the destination; the gain there is the region-limited copy, which for a quarter turn rounds out to whole 8x8 tiles. Per-pixel put and blend pay four comparisons each for the union; row and rectangle writes pay them once per span. A presenter that cannot lend its memory (a texture upload) keeps a WindowBuffer of its own and uploads its damage. A screen that clips wrongly leaves old pixels on screen, which is the same failure as drawing the wrong thing and shows the same way; the contract is opt-in and painting everything is always right.
+        """
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    supported_by [ @pixelkit.evidence.present-copy-and-partial-repaint-bench ]
+    author "dk"
+    source {
+        kind external
+        role origin
+        document "rune-comparison-2026-11-06"
+        use """
+            Section 6's first two recommendations: eliminate the framebuffer copy through a direct-write presentation path, and build an optional dirty-region rendering contract that keeps rectangles valid through drawing and presentation.
+            """
+    }
+}
+
 record pixelkit.decision.facade-crate-and-app-adapter/1 : decision {
     title "A top-level `liminalkit` crate is the entry point: re-exports, App/Screen adapter, and the cross-crate examples"
     state proposed

@@ -10,5 +10,16 @@
     "origin": "external",
     "path": "sources/external/outside-review-2026-11-03--aa61e0d5.md",
     "title": "Outside agent review of liminalkit's value, philosophy and public-toolkit potential (2026-11-03)"
+  },
+  {
+    "added_at": "2026-11-06",
+    "availability": "full",
+    "byte_len": 15364,
+    "content_hash": "sha256:a458e5e6d8dd8fbe98b4bfb6873fb8efbdc5228d597d7eabfd40598e47b00960",
+    "id": "rune-comparison-2026-11-06",
+    "media_type": "text/markdown",
+    "origin": "external",
+    "path": "sources/external/rune-comparison-2026-11-06--a458e5e6.md",
+    "title": "Outside comparison of liminalkit with Rune on runtime performance and memory (2026-11-06)"
   }
 ]

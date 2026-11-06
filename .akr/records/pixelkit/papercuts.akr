@@ -24,6 +24,17 @@ record pixelkit.papercut.akr-explain-acceptance-does-not-describe-the/1 : paperc
     created_at 2026-10-15
 }
 
+record pixelkit.papercut.akr-start-refused-to-orient-the-task-because/1 : papercut {
+    title "akr start refused to orient the task because the committed ledger…"
+    state verified
+    statement """
+        akr start refused to orient the task because the committed ledger failed check: views stale, akr.lock missing a hash for a new evidence record, and an evidence artifact citing .agent/scratch (AKR-T023). The repairs were akr scratch prune and akr build, which only akr check's help text pointed at; a commit that adds records without running akr build leaves the next agent unable to start.
+        """
+    observed_at git:9396e3f66c9da7af83acd688c76c779f3229d9f4
+    author "claude"
+    created_at 2026-11-06
+}
+
 record pixelkit.papercut.building-docs-with-rustdocflags-d-warnings/1 : papercut {
     title "Building docs with RUSTDOCFLAGS=-D warnings fails in liminalkit-raster…"
     state verified
@@ -170,4 +181,15 @@ record pixelkit.papercut.the-readme-said-the-gallery-example-writes/1 : papercut
     observed_at git:19c5cd393ad6ee802170a789fd3fd1e4ff84bcdf
     author "claude"
     created_at 2026-11-03
+}
+
+record pixelkit.papercut.the-workspace-forbids-unsafe-so-frame-bench/1 : papercut {
+    title "The workspace forbids unsafe, so frame_bench cannot count allocations:…"
+    state verified
+    statement """
+        The workspace forbids unsafe, so frame_bench cannot count allocations: a counting allocator is unsafe impl GlobalAlloc. Worth deciding whether an example or a dev-only crate may opt out, or whether allocation counts belong to the separate cross-toolkit benchmark workspace.
+        """
+    observed_at git:9396e3f66c9da7af83acd688c76c779f3229d9f4
+    author "claude"
+    created_at 2026-11-06
 }
