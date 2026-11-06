@@ -20,7 +20,7 @@ Dependencies point downward only. `raster` and `text` know nothing about windows
 
 ## A frame
 
-A host (desktop or KMS) owns a `WindowBuffer` of XRGB pixels at the window's device size and calls `PixelApp::render(&mut buffer, scale)` when something needs drawing: input arrived, a `Waker` fired from another thread, or an animation interval elapsed. There is no frame loop while idle.
+A host (desktop or KMS) hands the application a `WindowBuffer` of XRGB pixels at the window's device size and calls `PixelApp::render(&mut buffer, scale)` when something needs drawing: input arrived, a `Waker` fired from another thread, or an animation interval elapsed. There is no frame loop while idle. On the desktop the buffer's pixels are the presenter's own memory, lent for the frame; on KMS they are the host's, copied to scan-out afterwards. The application cannot tell, and draws the same either way.
 
 Inside `render` the application:
 
@@ -28,6 +28,8 @@ Inside `render` the application:
 2. Builds a `Painter` over the buffer and a `Ui` over the painter, its `TextCache`, the `Input`, its `Theme`, the `Scale` and a `RasterKernel`. `Ui::with_focus` attaches Tab traversal; `Ui::with_semantics` attaches the accessibility collector.
 3. Computes rectangles (stateless layout) and calls controls. Each control draws itself and returns what happened: pressed, changed, picked.
 4. Draws popups last (`draw`), then calls `Input::end_frame`, which discards unclaimed clicks and keys. Unclaimed input is never carried to the next frame.
+
+Two rectangles travel with the buffer. `stale` is what the host knows going in: the part of the buffer that does not hold this application's previous frame (all of it on the first frame and after a resize; nothing while the presenter keeps the last frame; on Wayland, which alternates between two buffers, the region the last frame changed). `damage` is what the painter reports coming out: the union of every write, recorded after clipping, so it is exact. A frame that repaints only what changed clips its painter to `stale` plus the rectangles it knows changed before step 3 and otherwise runs unchanged; the host then presents `damage` and nothing else. A frame that ignores both repaints everything and the host presents everything, as it always did.
 
 `App<S: Screen>` in the facade crate performs steps 2 and 4 and the resource ownership for a `Screen`, whose `before_frame` is step 1 and whose `draw` is step 3. It is a thin `PixelApp`; its source is the reference for writing one by hand.
 
@@ -58,13 +60,13 @@ Plain functions from a rectangle to rectangles, nothing retained: `vstack`/`hsta
 
 ## Rendering
 
-`Painter` draws fills, strokes, rounded rectangles, closed paths under non-zero or even-odd rules, bitmaps and prepared images into the XRGB buffer with a clip stack. Coverage for paths and glyphs comes from one analytic kernel. SIMD paths are checked byte for byte against the scalar specification and can be disabled with `LIMINALKIT_SIMD=scalar`. Cost scales with resolution and redraw area.
+`Painter` draws fills, strokes, rounded rectangles, closed paths under non-zero or even-odd rules, bitmaps and prepared images into the XRGB buffer with a clip stack. Every write goes through the clip and grows the buffer's `damage`, so the clip is also how a frame is confined to the region it means to repaint. Coverage for paths and glyphs comes from one analytic kernel. SIMD paths are checked byte for byte against the scalar specification and can be disabled with `LIMINALKIT_SIMD=scalar`. Cost scales with resolution and redraw area; `crates/liminalkit/examples/frame_bench.rs` measures both, and the cost of the copy a presenter that cannot lend its memory would add.
 
 ## The two hosts
 
-`liminalkit-windowing::run_app` opens a winit window and presents the buffer through softbuffer (or any `Presenter` the application supplies). It tracks the scale factor, forwards keys, IME, pointer, scroll, touch, file drops and theme changes, sleeps until a wake, and with `accessibility` publishes the application's AccessKit tree. `run_windows` shares one event loop between several windows, each with its own `PixelApp`.
+`liminalkit-windowing::run_app` opens a winit window and presents through softbuffer (or any `Presenter` the application supplies). The `Presenter` lends a buffer for each frame and shows its damage; `SoftbufferPresenter` lends softbuffer's own buffer, so the frame is drawn once and copied never, and turns softbuffer's buffer age into `stale`. It tracks the scale factor, forwards keys, IME, pointer, scroll, touch, file drops and theme changes, sleeps until a wake, and with `accessibility` publishes the application's AccessKit tree. `run_windows` shares one event loop between several windows, each with its own `PixelApp`.
 
-`liminalkit-kms::run_kms` runs the same `PixelApp` full screen on a bare Linux display: one copy into a DRM scan-out buffer per frame, paced by the page flip, with evdev multi-touch and no window system. It gives up the keyboard, IME, clipboard, cursor and multiple windows. The application cannot tell which host called it.
+`liminalkit-kms::run_kms` runs the same `PixelApp` full screen on a bare Linux display: the application draws into a buffer the host keeps, and the region that changed in the last two frames (the scan-out buffer being written is the one shown two flips ago) is copied into a DRM dumb buffer, paced by the page flip, with evdev multi-touch and no window system. The application does not draw into scan-out memory itself: that memory is write-combined and uncached, and blending reads back what it writes. It gives up the keyboard, IME, clipboard, cursor and multiple windows. The application cannot tell which host called it.
 
 ## Touch
 

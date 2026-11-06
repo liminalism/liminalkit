@@ -79,7 +79,7 @@ pub mod prelude {
     pub use crate::app::{run, App, Context, Screen};
     pub use crate::raster::{Painter, RasterKernel, Rect, WindowBuffer};
     pub use crate::shell::{Input, KeyInput, Modifiers, MouseButton, Scale};
-    pub use crate::text::{Align, Face, FaceId, FontSet, TextCache, TextStyle};
+    pub use crate::text::{Align, CacheStats, Face, FaceId, FontSet, TextCache, TextStyle};
     pub use crate::ui::{
         centre, hstack, place, vstack, Anchor, ButtonStyle, Drag, Dropdown, Flow, Focus, Insets,
         Length, Menu, Overlay, ScrollState, TableState, TextAreaState, TextFieldState, Theme,

@@ -386,7 +386,7 @@ mod tests {
     }
 
     struct Harness {
-        buffer: WindowBuffer,
+        buffer: WindowBuffer<'static>,
         text: TextCache,
         input: Input,
         kernel: liminalkit_raster::RasterKernel,

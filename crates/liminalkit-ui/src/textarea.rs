@@ -392,7 +392,7 @@ mod tests {
     use liminalkit_text::TextCache;
 
     struct Harness {
-        buffer: WindowBuffer,
+        buffer: WindowBuffer<'static>,
         text: TextCache,
         kernel: RasterKernel,
         input: Input,

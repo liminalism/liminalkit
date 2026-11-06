@@ -24,7 +24,7 @@ fn main() {
                         .map(|_| {
                             let started = Instant::now();
                             let bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut dest[..]);
-                            rotation.copy(&source, panel, bytes, pitch);
+                            rotation.copy(&source, panel, bytes, pitch, source.bounds());
                             started.elapsed()
                         })
                         .collect();

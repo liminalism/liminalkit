@@ -2379,7 +2379,7 @@ mod masked_text_field_tests {
         }
     }
 
-    fn render(text: &str, masked: bool, focused: bool) -> WindowBuffer {
+    fn render(text: &str, masked: bool, focused: bool) -> WindowBuffer<'static> {
         let area = area();
         let mut buffer = WindowBuffer::new(area.w as u32, area.h as u32);
         let mut text_cache = TextCache::new(set());

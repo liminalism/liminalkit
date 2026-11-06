@@ -1,10 +1,22 @@
-//! The presenter seam: how a finished pixel buffer reaches the window.
+//! The presenter seam: how a frame reaches the window.
 //!
-//! The application paints into a [`WindowBuffer`]; a [`Presenter`] owns the
-//! platform surface and copies the buffer onto it. Today that is softbuffer.
-//! A GPU presenter would implement the same trait — first as a texture upload
-//! of the same buffer (vsync'd presents for free), later as a compositor if
-//! profiling ever asks for one — without touching the application.
+//! A [`Presenter`] owns the platform surface. Each frame it lends the
+//! application a [`WindowBuffer`] to paint into and then shows the result.
+//! When the surface's memory can be mapped — softbuffer's can, on every
+//! desktop — the buffer *is* that memory, so a frame is rasterized once and
+//! copied never; a presenter that cannot lend its surface (a texture
+//! upload, say) paints into a buffer it owns and uploads from that. The
+//! application cannot tell which it was given.
+//!
+//! The buffer carries two rectangles with its pixels. Going in, the
+//! presenter sets [`WindowBuffer::stale`]: the part of the buffer that does
+//! not hold the application's previous frame, which is everything after a
+//! resize or on a surface that recycles buffers, and nothing on a surface
+//! that keeps the last frame. Coming out, [`WindowBuffer::damage`] is what
+//! the painter wrote, and the presenter shows that and nothing else. An
+//! application that repaints only what changed therefore needs no second
+//! contract: it clips its painter to `stale` plus its own changes, draws as
+//! it always has, and the damage is exact.
 
 use liminalkit_raster::WindowBuffer;
 
@@ -36,7 +48,15 @@ pub enum PresenterBackend {
 pub trait Presenter {
     /// The surface now has this physical size.
     fn resize(&mut self, width: u32, height: u32) -> Result<(), PresentError>;
-    /// Copy the whole buffer to the window. `buffer` matches the last resize.
-    fn present(&mut self, buffer: &WindowBuffer) -> Result<(), PresentError>;
+
+    /// Paint one frame and show it. `paint` receives a buffer of the size
+    /// from the last [`resize`](Presenter::resize), with
+    /// [`WindowBuffer::stale`] set and [`WindowBuffer::damage`] empty; the
+    /// presenter then shows what `damage` says was written. Nothing written
+    /// means nothing shown, except on a surface whose contents are undefined,
+    /// which is shown whole so the window is never left with garbage.
+    fn present(&mut self, paint: &mut dyn FnMut(&mut WindowBuffer<'_>))
+        -> Result<(), PresentError>;
+
     fn backend(&self) -> PresenterBackend;
 }

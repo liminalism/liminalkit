@@ -51,6 +51,14 @@ pub struct Context {
     pub scale: Scale,
     /// The window's size in device pixels.
     pub size: (i32, i32),
+    /// The part of the window that does not show this screen's previous
+    /// frame: everything on the first frame and after a resize, nothing
+    /// when the host kept the last frame. A screen that knows what changed
+    /// repaints only that: `ui.painter.push_clip(ctx.stale.union(changed))`
+    /// first thing in [`Screen::draw`], then draw as usual. Controls outside
+    /// the clip still run and answer; only their pixels are skipped, and
+    /// the host shows only what was painted. See [`PixelApp::render`].
+    pub stale: Rect,
     /// Set to close the window and end `run`.
     pub exit: bool,
     /// A new window title, applied once.
@@ -87,10 +95,11 @@ impl Context {
 /// Something that can draw a screen. One frame is one call to
 /// [`draw`](Screen::draw); every other method has a default.
 pub trait Screen {
-    /// Paint the whole frame into `ui`. `ui.painter` is the window,
-    /// `ui.input` is this frame's events, and the controls on `ui` draw and
-    /// answer. Rectangles are device pixels: `ui.rect(..)` converts a
-    /// logical one.
+    /// Paint the frame into `ui`. `ui.painter` is the window, `ui.input` is
+    /// this frame's events, and the controls on `ui` draw and answer.
+    /// Rectangles are device pixels: `ui.rect(..)` converts a logical one.
+    /// Painting everything is always right; a screen that knows what
+    /// changed may clip to `ctx.stale` plus that and paint less.
     fn draw(&mut self, ui: &mut Ui<'_>, ctx: &mut Context);
 
     /// Claim input before anything draws. An open popup goes here:
@@ -258,6 +267,7 @@ impl<S: Screen> PixelApp for App<S> {
         let mut ctx = Context {
             scale,
             size,
+            stale: buffer.stale,
             exit: false,
             title: None,
             fullscreen: None,

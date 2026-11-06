@@ -18,7 +18,7 @@ use std::os::fd::AsFd;
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
 
-use liminalkit_raster::WindowBuffer;
+use liminalkit_raster::{Rect, WindowBuffer};
 use liminalkit_shell::{FrameTimer, Scale};
 use liminalkit_windowing::{PixelApp, Waker};
 use rustix::event::{poll, PollFd, PollFlags, Timespec};
@@ -85,6 +85,10 @@ pub fn run<A: PixelApp>(mut app: A, config: KmsConfig) -> Result<(), KmsError> {
     let scale = Scale(config.scale);
     app.on_scale(scale);
     let mut buffer = WindowBuffer::new(width, height);
+    // What the previous frame changed. The scan-out buffer being written is
+    // the one shown two flips ago, so it needs that change as well as this
+    // frame's.
+    let mut previous_damage = buffer.bounds();
     let mut pacer = Pacer::new(output.refresh);
     let mut timer = FrameTimer::from_env();
     let mut input_at: Option<Instant> = None;
@@ -103,15 +107,23 @@ pub fn run<A: PixelApp>(mut app: A, config: KmsConfig) -> Result<(), KmsError> {
 
             if pacer.should_render() {
                 let started = Instant::now();
+                buffer.damage = Rect::default();
                 app.render(&mut buffer, scale);
                 // The buffer is the panel's shape and the copy relies on it; an
                 // application that resized it gets it back rather than taking
-                // the host down.
+                // the host down. Its pixels are gone, so everything is stale.
                 if (buffer.width, buffer.height) != (width, height) {
                     buffer.resize(width, height);
+                    previous_damage = buffer.bounds();
                 }
                 let painted = Instant::now();
-                display.present(&buffer, config.rotation)?;
+                let damage = buffer.damage.intersect(buffer.bounds());
+                display.present(&buffer, config.rotation, damage.union(previous_damage))?;
+                previous_damage = damage;
+                // The application's buffer keeps its own frame between
+                // renders; only the scan-out copy is ever behind.
+                buffer.stale = Rect::default();
+                timer.record_damage(damage, width as usize * height as usize);
                 pacer.rendered(
                     (tick, painted - started, painted.elapsed(), input_at.take()),
                     Instant::now(),

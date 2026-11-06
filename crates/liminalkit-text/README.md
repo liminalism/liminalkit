@@ -1,6 +1,6 @@
 # liminalkit-text
 
-The text layer of [liminalkit](../../README.md): TrueType parsing, the OpenType substitution and positioning lookups the bundled Latin and Thai faces use, exact-area glyph rasterisation through `liminalkit-raster`'s kernel, wrapping, and a cache keyed by `(text, style)`.
+The text layer of [liminalkit](../../README.md): TrueType parsing, the OpenType substitution and positioning lookups the bundled Latin and Thai faces use, exact-area glyph rasterisation through `liminalkit-raster`'s kernel, wrapping, and a cache keyed by `(text, style)` that reports its occupancy and traffic (`TextCache::stats`) so it can be sized to the screen and the machine.
 
 **What it is for.** An application embeds its faces, registers them in a `FontSet` with fallback chains, and draws strings with a `TextCache`: measure, wrap, draw, draw fitted with an ellipsis, with ligatures, kerning and mark attachment where the face provides them. Per-character fallback walks the chain so a Thai string in a Latin style finds the Thai face.
 

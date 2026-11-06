@@ -14,26 +14,162 @@
 /// The window's pixels, row-major. [`Painter::new`] writes XRGB;
 /// [`Painter::new_premultiplied`] writes premultiplied ARGB with coverage in the top byte.
 /// The presenter must interpret the buffer with the same mode as its painter.
-#[derive(Debug, Clone)]
-pub struct WindowBuffer {
+///
+/// The pixels are either the buffer's own ([`WindowBuffer::new`]) or lent
+/// by whoever will show them ([`WindowBuffer::over`]): a presenter that can
+/// map its surface hands the rasterizer that memory, so a frame is drawn
+/// once and copied never. Code that draws cannot tell the two apart.
+///
+/// Two rectangles travel with the pixels, so that a frame can repaint only
+/// what changed. [`stale`](WindowBuffer::stale) is what the host knows
+/// coming in: the part of the buffer that does not hold the frame this
+/// application drew last. [`damage`](WindowBuffer::damage) is what the
+/// painter reports going out: the union of every pixel it wrote. A frame
+/// that redraws everything can ignore both; the host sees a full damage and
+/// presents the whole buffer, as it always did.
+#[derive(Debug)]
+pub struct WindowBuffer<'a> {
     pub width: u32,
     pub height: u32,
-    pub pixels: Vec<u32>,
+    pub pixels: Pixels<'a>,
+    /// The part of the buffer whose pixels are *not* the frame this
+    /// application painted last: the whole buffer before the first frame,
+    /// after a resize, and whenever the presenter could not keep the
+    /// previous frame; empty when the buffer holds exactly the last frame.
+    /// A frame that repaints only what changed must repaint this as well:
+    /// `painter.push_clip(buffer.stale.union(changed))`, then draw as usual.
+    pub stale: Rect,
+    /// The union of every pixel a [`Painter`] over this buffer has written
+    /// since the host last cleared it. The host presents this region and
+    /// nothing else, so it is exact by construction: the painter records
+    /// each write after clipping, and an application never has to say what
+    /// it touched.
+    pub damage: Rect,
 }
 
-impl WindowBuffer {
-    pub fn new(width: u32, height: u32) -> WindowBuffer {
+/// Storage for a [`WindowBuffer`]: its own allocation, or memory lent for
+/// one frame by the presenter. Dereferences to the pixel slice either way.
+pub enum Pixels<'a> {
+    Owned(Vec<u32>),
+    Lent(&'a mut [u32]),
+}
+
+impl std::ops::Deref for Pixels<'_> {
+    type Target = [u32];
+
+    fn deref(&self) -> &[u32] {
+        match self {
+            Pixels::Owned(pixels) => pixels,
+            Pixels::Lent(pixels) => pixels,
+        }
+    }
+}
+
+impl std::ops::DerefMut for Pixels<'_> {
+    fn deref_mut(&mut self) -> &mut [u32] {
+        match self {
+            Pixels::Owned(pixels) => pixels,
+            Pixels::Lent(pixels) => pixels,
+        }
+    }
+}
+
+impl std::fmt::Debug for Pixels<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let kind = match self {
+            Pixels::Owned(_) => "Owned",
+            Pixels::Lent(_) => "Lent",
+        };
+        write!(f, "Pixels::{kind}({} pixels)", self.len())
+    }
+}
+
+impl PartialEq for Pixels<'_> {
+    fn eq(&self, other: &Pixels<'_>) -> bool {
+        **self == **other
+    }
+}
+
+impl Eq for Pixels<'_> {}
+
+impl From<Vec<u32>> for Pixels<'static> {
+    fn from(pixels: Vec<u32>) -> Pixels<'static> {
+        Pixels::Owned(pixels)
+    }
+}
+
+impl WindowBuffer<'static> {
+    /// A buffer with its own zeroed pixels. Everything is stale: nothing has
+    /// been drawn yet.
+    pub fn new(width: u32, height: u32) -> WindowBuffer<'static> {
         WindowBuffer {
             width,
             height,
-            pixels: vec![0; width as usize * height as usize],
+            pixels: Pixels::Owned(vec![0; width as usize * height as usize]),
+            stale: Rect::new(0, 0, width as i32, height as i32),
+            damage: Rect::default(),
+        }
+    }
+}
+
+impl<'a> WindowBuffer<'a> {
+    /// A buffer over memory someone else owns, for the length of one frame.
+    /// `pixels` must hold exactly `width * height` values. Everything is
+    /// stale until the lender says otherwise.
+    pub fn over(width: u32, height: u32, pixels: &'a mut [u32]) -> WindowBuffer<'a> {
+        assert_eq!(
+            pixels.len(),
+            width as usize * height as usize,
+            "a {width}x{height} buffer needs {} pixels, not {}",
+            width as usize * height as usize,
+            pixels.len()
+        );
+        WindowBuffer {
+            width,
+            height,
+            pixels: Pixels::Lent(pixels),
+            stale: Rect::new(0, 0, width as i32, height as i32),
+            damage: Rect::default(),
         }
     }
 
+    /// Change the size. The pixels are undefined afterwards, so the whole
+    /// buffer is stale. Lent pixels cannot change size; resizing them to
+    /// anything but their own size is a programming error and panics.
     pub fn resize(&mut self, width: u32, height: u32) {
+        let len = width as usize * height as usize;
+        match &mut self.pixels {
+            Pixels::Owned(pixels) => pixels.resize(len, 0),
+            Pixels::Lent(pixels) => assert_eq!(
+                pixels.len(),
+                len,
+                "lent pixels keep the presenter's size; a {}x{} buffer cannot become {width}x{height}",
+                self.width,
+                self.height
+            ),
+        }
         self.width = width;
         self.height = height;
-        self.pixels.resize(width as usize * height as usize, 0);
+        self.stale = Rect::new(0, 0, width as i32, height as i32);
+        self.damage = Rect::default();
+    }
+
+    /// The whole buffer as a rectangle.
+    pub fn bounds(&self) -> Rect {
+        Rect::new(0, 0, self.width as i32, self.height as i32)
+    }
+}
+
+impl Clone for WindowBuffer<'_> {
+    /// A clone owns its pixels, whoever owned the original's.
+    fn clone(&self) -> Self {
+        WindowBuffer {
+            width: self.width,
+            height: self.height,
+            pixels: Pixels::Owned(self.pixels.to_vec()),
+            stale: self.stale,
+            damage: self.damage,
+        }
     }
 }
 
@@ -120,6 +256,26 @@ impl Rect {
         self.w <= 0 || self.h <= 0
     }
 
+    /// The smallest rectangle holding both. An empty rectangle contributes
+    /// nothing, so a union can start from `Rect::default()`.
+    pub fn union(self, other: Rect) -> Rect {
+        if self.is_empty() {
+            return if other.is_empty() {
+                Rect::default()
+            } else {
+                other
+            };
+        }
+        if other.is_empty() {
+            return self;
+        }
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let right = self.right().max(other.right());
+        let bottom = self.bottom().max(other.bottom());
+        Rect::new(x, y, right - x, bottom - y)
+    }
+
     /// Move by an offset — how a scrolled row finds its place on screen.
     pub fn translate(self, dx: i32, dy: i32) -> Rect {
         Rect::new(self.x + dx, self.y + dy, self.w, self.h)
@@ -127,7 +283,17 @@ impl Rect {
 }
 
 pub struct Painter<'a> {
-    buffer: &'a mut WindowBuffer,
+    /// The buffer's pixels, borrowed for the painter's life. Pieces rather
+    /// than the buffer, so one lifetime serves whether the pixels are the
+    /// buffer's own or lent by a presenter.
+    pixels: &'a mut [u32],
+    width: usize,
+    height: usize,
+    /// The buffer's damage, grown by every write. Lives on the buffer rather
+    /// than here so it survives the painter: the host reads it after the
+    /// application has dropped its painter, and two painters over one frame
+    /// add up.
+    damage: &'a mut Rect,
     /// Opt-in premultiplied ARGB storage. RGB drawing APIs still take ordinary RGB colours.
     premultiplied: bool,
     /// The region drawing is confined to. Every write goes through it, so a
@@ -149,10 +315,14 @@ pub struct Painter<'a> {
 const INLINE_CLIP_DEPTH: usize = 8;
 
 impl<'a> Painter<'a> {
-    pub fn new(buffer: &'a mut WindowBuffer) -> Painter<'a> {
+    pub fn new(buffer: &'a mut WindowBuffer<'_>) -> Painter<'a> {
         let clip = Rect::new(0, 0, buffer.width as i32, buffer.height as i32);
+        let (width, height) = (buffer.width as usize, buffer.height as usize);
         Painter {
-            buffer,
+            pixels: &mut buffer.pixels[..width * height],
+            width,
+            height,
+            damage: &mut buffer.damage,
             premultiplied: false,
             clip,
             saved_inline: [Rect::default(); INLINE_CLIP_DEPTH],
@@ -163,7 +333,7 @@ impl<'a> Painter<'a> {
 
     /// Paint premultiplied `0xAARRGGBB` for an alpha-capable native presenter.
     /// RGB fills are opaque; use `erase_rect` for genuinely transparent ground.
-    pub fn new_premultiplied(buffer: &'a mut WindowBuffer) -> Painter<'a> {
+    pub fn new_premultiplied(buffer: &'a mut WindowBuffer<'_>) -> Painter<'a> {
         Painter {
             premultiplied: true,
             ..Self::new(buffer)
@@ -216,11 +386,23 @@ impl<'a> Painter<'a> {
     }
 
     pub fn width(&self) -> i32 {
-        self.buffer.width as i32
+        self.width as i32
     }
 
     pub fn height(&self) -> i32 {
-        self.buffer.height as i32
+        self.height as i32
+    }
+
+    /// Everything written through this painter so far, and through any
+    /// other painter over the same buffer since the host last cleared it.
+    pub fn damage(&self) -> Rect {
+        *self.damage
+    }
+
+    /// Grow the damage by a rectangle that has already been clipped.
+    #[inline]
+    fn touched(&mut self, rect: Rect) {
+        *self.damage = self.damage.union(rect);
     }
 
     pub fn bounds(&self) -> Rect {
@@ -241,12 +423,12 @@ impl<'a> Painter<'a> {
     #[inline]
     pub fn put(&mut self, x: i32, y: i32, color: u32) {
         if self.clip.contains(x, y) {
-            self.buffer.pixels[y as usize * self.buffer.width as usize + x as usize] =
-                if self.premultiplied {
-                    color | 0xff00_0000
-                } else {
-                    color
-                };
+            self.pixels[y as usize * self.width + x as usize] = if self.premultiplied {
+                color | 0xff00_0000
+            } else {
+                color
+            };
+            self.touched(Rect::new(x, y, 1, 1));
         }
     }
 
@@ -266,12 +448,13 @@ impl<'a> Painter<'a> {
         if !self.clip.contains(x, y) {
             return;
         }
-        let index = y as usize * self.buffer.width as usize + x as usize;
-        self.buffer.pixels[index] = if self.premultiplied {
-            crate::blend::blend_premultiplied(self.buffer.pixels[index], color, alpha)
+        let index = y as usize * self.width + x as usize;
+        self.pixels[index] = if self.premultiplied {
+            crate::blend::blend_premultiplied(self.pixels[index], color, alpha)
         } else {
-            blend_channels(self.buffer.pixels[index], color, alpha)
+            blend_channels(self.pixels[index], color, alpha)
         };
+        self.touched(Rect::new(x, y, 1, 1));
     }
 
     /// The visible part of a `len`-pixel run starting at `(x, y)`: how far into
@@ -292,9 +475,10 @@ impl<'a> Painter<'a> {
         if end <= start {
             return None;
         }
-        let left = y as usize * self.buffer.width as usize + (x + start) as usize;
+        let left = y as usize * self.width + (x + start) as usize;
         let count = (end - start) as usize;
-        Some((start as usize, &mut self.buffer.pixels[left..left + count]))
+        self.touched(Rect::new(x + start, y, end - start, 1));
+        Some((start as usize, &mut self.pixels[left..left + count]))
     }
 
     /// Whether this painter stores premultiplied alpha in the top byte.
@@ -326,8 +510,8 @@ impl<'a> Painter<'a> {
         let (start, end) = (start as usize, end as usize);
         // The clip is only ever intersected, never replaced, so it is still
         // inside the buffer and these indices are too.
-        let left = y as usize * self.buffer.width as usize + (x + start as i32) as usize;
-        let destination = &mut self.buffer.pixels[left..left + (end - start)];
+        let left = y as usize * self.width + (x + start as i32) as usize;
+        let destination = &mut self.pixels[left..left + (end - start)];
         if self.premultiplied {
             for (pixel, &coverage) in destination.iter_mut().zip(&coverage[start..end]) {
                 *pixel = crate::blend::blend_premultiplied(*pixel, color, coverage);
@@ -335,6 +519,7 @@ impl<'a> Painter<'a> {
         } else {
             crate::blend::blend_coverage_span(destination, color, &coverage[start..end]);
         }
+        self.touched(Rect::new(x + start as i32, y, (end - start) as i32, 1));
     }
 
     /// The opaque colour at a pixel, if it is inside the clip: what text
@@ -345,7 +530,7 @@ impl<'a> Painter<'a> {
         if !self.clip.contains(x, y) {
             return None;
         }
-        let pixel = self.buffer.pixels[y as usize * self.buffer.width as usize + x as usize];
+        let pixel = self.pixels[y as usize * self.width + x as usize];
         if self.premultiplied && pixel >> 24 != 0xff {
             return None;
         }
@@ -371,8 +556,8 @@ impl<'a> Painter<'a> {
             return;
         }
         let (start, end) = (start as usize, end as usize);
-        let left = y as usize * self.buffer.width as usize + (x + start as i32) as usize;
-        let destination = &mut self.buffer.pixels[left..left + (end - start)];
+        let left = y as usize * self.width + (x + start as i32) as usize;
+        let destination = &mut self.pixels[left..left + (end - start)];
         if self.premultiplied {
             for (pixel, &coverage) in destination.iter_mut().zip(&coverage[start..end]) {
                 *pixel =
@@ -386,6 +571,7 @@ impl<'a> Painter<'a> {
                 curve,
             );
         }
+        self.touched(Rect::new(x + start as i32, y, (end - start) as i32, 1));
     }
 
     pub fn fill_rect(&mut self, rect: Rect, color: u32) {
@@ -402,7 +588,8 @@ impl<'a> Painter<'a> {
         if visible.is_empty() {
             return;
         }
-        let width = self.buffer.width as usize;
+        let width = self.width;
+        self.touched(visible);
         // A rectangle that spans the buffer's full width — a screen cleared, a
         // panel across the top, a selected row in a table that fills the
         // window — is one contiguous run. Filling it in one call rather than
@@ -411,13 +598,12 @@ impl<'a> Painter<'a> {
         if visible.x == 0 && visible.w as usize == width {
             let top = visible.y as usize * width;
             let bottom = visible.bottom() as usize * width;
-            self.buffer.pixels[top..bottom].fill(color);
+            self.pixels[top..bottom].fill(color);
             return;
         }
         for y in visible.y..visible.bottom() {
             let row = y as usize * width;
-            self.buffer.pixels[row + visible.x as usize..row + visible.right() as usize]
-                .fill(color);
+            self.pixels[row + visible.x as usize..row + visible.right() as usize].fill(color);
         }
     }
 

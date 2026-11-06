@@ -43,8 +43,40 @@ than the one it was extracted from can pick up.
   versions, or wants the old look, sets
   `TextCache::set_rendering(TextRendering::UNCORRECTED)`.
 
+- `Presenter::present` takes a closure that paints into the buffer the
+  presenter lends, instead of a finished `&WindowBuffer`, so the presenter
+  can hand the rasterizer its own surface memory. A custom presenter
+  implements `present(&mut self, paint: &mut dyn FnMut(&mut
+  WindowBuffer<'_>))`, sets `buffer.stale`, calls `paint`, and shows
+  `buffer.damage`; one that cannot lend its memory keeps a `WindowBuffer`
+  of its own and uploads from that.
+- `WindowBuffer` is `WindowBuffer<'a>`: its pixels are either its own or
+  lent for one frame, and `pixels` is a `Pixels<'a>` that dereferences to
+  `[u32]` rather than a `Vec<u32>`. Indexing, iterating, `fill` and
+  `copy_from_slice` are unchanged; a struct field or return type names
+  `WindowBuffer<'static>` for a buffer it owns, and code that replaced or
+  grew the `Vec` uses `WindowBuffer::resize`. `Painter::new` is unchanged.
+
 ### Added
 
+- The desktop host draws straight into softbuffer's buffer. The copy of
+  the whole frame on every present is gone: 0.6 ms of a 2.9 ms frame at
+  1080p and 2.4 ms of 11.3 ms at 4K in `frame_bench`, and the memory
+  traffic that went with it.
+- Repainting only what changed, without retained state: `WindowBuffer::stale`
+  (and `Context::stale` under `App`) is the part of the buffer that does not
+  hold the previous frame, `WindowBuffer::damage` is the union of what the
+  painter wrote, and `Rect::union` joins them. A screen clips its painter to
+  `stale` plus what it knows changed and draws as usual; the host presents the
+  damage and nothing else. `SoftbufferPresenter` derives `stale` from
+  softbuffer's buffer age, so it is right on X11, Wayland and Windows alike,
+  and the KMS host copies only the damaged region into scan-out memory.
+  `examples/clock.rs` shows it; `LIMINALKIT_FRAME_LOG=1` reports the
+  repainted share.
+- `TextCache::stats` (`CacheStats`): entries, bitmap bytes, their limits,
+  lookups, misses and evictions, for sizing the cache to a screen.
+  `frame_bench` reports them, and measures a feed of fresh strings under
+  three sets of limits.
 - The system clipboard works on Windows: `Clipboard` text read, write and
   clear go through the Win32 clipboard (CF_UNICODETEXT) via arboard's
   clipboard-win backend, so Ctrl+V in a `TextFieldState` with an attached

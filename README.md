@@ -13,7 +13,7 @@ That image is `cargo run -p liminalkit-ui --example gallery`: every control the 
 ## Why this and not egui, Dioxus, or Freya
 
 - **State lives in your structs.** A control is a function: it takes a rectangle and `&mut` to its state, draws, and returns what happened. Nothing is hashed, nothing is looked up by a name that could collide, and reordering a screen cannot move state to the wrong control. egui is also immediate-mode but keeps interaction state and widget ids inside the framework.
-- **Software rendering is the architecture, not a fallback.** Every frame is drawn into an XRGB pixel buffer by a clipped painter with analytic anti-aliasing. Idle screens cost nothing: the host sleeps until input or a wake arrives. Cost scales with resolution and redraw area, which suits a 1080p dashboard or a Raspberry Pi panel better than a highly animated 4K interface.
+- **Software rendering is the architecture, not a fallback.** Every frame is drawn into an XRGB pixel buffer by a clipped painter with analytic anti-aliasing, and on the desktop that buffer is the window system's own, so nothing is copied to show it. Idle screens cost nothing: the host sleeps until input or a wake arrives. Cost scales with resolution and redraw area, and a screen that knows what changed repaints only that, which suits a 1080p dashboard or a Raspberry Pi panel better than a highly animated 4K interface.
 - **Two hosts, one application.** `run_app` opens a winit window and presents through softbuffer. `run_kms` runs the same application full screen on a bare Linux display with evdev multi-touch and no window system.
 - **A small number of understandable abstractions.** Every piece of state a control needs is a parameter. A convenient API is welcome; a hidden mechanism that undermines predictability needs a strong reason.
 
@@ -100,11 +100,15 @@ The live shape of this is `crates/liminalkit/examples/window.rs`.
 
 ## Two hosts, one application
 
-`run_app` opens a winit window and presents through softbuffer. `run_kms` runs the same `PixelApp` on a bare Linux display: one copy into a DRM/KMS scan-out buffer, frames paced by the page flip, evdev multi-touch, and no window system. The application cannot tell which host called it.
+`run_app` opens a winit window and presents through softbuffer: the application draws straight into softbuffer's buffer, so a frame is rasterized once and never copied. `run_kms` runs the same `PixelApp` on a bare Linux display: the changed region copied into a DRM/KMS scan-out buffer, frames paced by the page flip, evdev multi-touch, and no window system. The application cannot tell which host called it.
 
 The KMS host gives up the keyboard, IME, clipboard, multiple windows, and a cursor. It needs DRM master, which means a virtual terminal with no desktop and membership in the `video` and `input` groups. `probe` lists the displays this process can see without taking one. The touch decoder, rotation, and frame pacing are unit-tested. Setting a mode belongs on a real panel.
 
-A different present path implements the shell's `Presenter` and is started with `run_app_with_presenter`. The default host uses `SoftbufferPresenter`.
+A different present path implements the shell's `Presenter` and is started with `run_app_with_presenter`. The default host uses `SoftbufferPresenter`. A presenter lends the application a buffer for each frame and shows what the painter wrote to it.
+
+### Repainting only what changed
+
+Painting the whole screen every frame is always right, and most screens do. A screen that knows what changed can paint less without any retained state: the buffer says which part of it is stale (`buffer.stale`, or `ctx.stale` under `App`: everything on the first frame and after a resize, nothing while the presenter keeps the previous frame), the screen clips its painter to that plus the rectangles it knows changed, and then draws exactly as it always has. Controls outside the clip still run and still answer; only their pixels are skipped. The painter records every write in `buffer.damage`, so the host shows exactly what was painted and nothing else, on the desktop as the window system's damage and on KMS as the only region copied to scan-out. `crates/liminalkit/examples/clock.rs` is the whole of it: one `push_clip` at the top of `draw`.
 
 Raster and text do not know about either host. The shell is what they share with the hosts: per-frame input, logical-to-physical scale, the presenter seam, and the clipboard. The application embeds its own fonts.
 

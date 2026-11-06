@@ -300,7 +300,10 @@ mod tests {
     use liminalkit_test_fonts::set;
     use liminalkit_text::TextCache;
 
-    fn ui_harness<R>(input: &mut Input, run: impl FnOnce(&mut Ui<'_>) -> R) -> (WindowBuffer, R) {
+    fn ui_harness<R>(
+        input: &mut Input,
+        run: impl FnOnce(&mut Ui<'_>) -> R,
+    ) -> (WindowBuffer<'static>, R) {
         let mut buffer = WindowBuffer::new(200, 100);
         let mut text = TextCache::new(set());
         let mut kernel = RasterKernel::new();

@@ -1,6 +1,6 @@
 # liminalkit-raster
 
-The drawing layer of [liminalkit](../../README.md): an XRGB `WindowBuffer`, a clipped `Painter`, and one analytic anti-aliasing kernel shared by vector paths and glyphs.
+The drawing layer of [liminalkit](../../README.md): an XRGB `WindowBuffer` (its own pixels, or memory a presenter lends for one frame), a clipped `Painter` that records what it wrote in the buffer's `damage`, and one analytic anti-aliasing kernel shared by vector paths and glyphs.
 
 **What it is for.** Filling and stroking rectangles, rounded rectangles, circles, polylines and closed paths under the non-zero or even-odd rule; blitting bitmaps and images prepared once for the size they are drawn at; decoding and encoding PNG; rasterising SVG path icons once and tinting them. Coverage can go through a `gamma` curve on its way to the blend (`Painter::blend_coverage_row_mapped`), which is how text is corrected for blending in sRGB. Everything lands in a `Vec<u32>` the caller owns.
 

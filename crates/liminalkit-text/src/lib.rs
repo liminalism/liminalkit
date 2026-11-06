@@ -16,7 +16,7 @@ pub mod rendering;
 pub mod sfnt;
 pub mod text;
 
-pub use cache::{Align, TextCache};
+pub use cache::{Align, CacheStats, TextCache};
 pub use font::{Face, FaceId, FontSet, TextStyle};
 pub use rendering::{Hinting, TextRendering};
 pub use text::{

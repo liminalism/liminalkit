@@ -22,7 +22,7 @@ use drm::control::{
     PageFlipFlags,
 };
 use drm::Device;
-use liminalkit_raster::WindowBuffer;
+use liminalkit_raster::{Rect, WindowBuffer};
 
 use crate::mode::{choose_mode, ModeSummary};
 use crate::rotate::Rotation;
@@ -215,17 +215,26 @@ impl Display {
         self.card.as_fd()
     }
 
-    /// Copy `buffer` into the back buffer and queue it for the next vertical
-    /// blank. Only one flip may be in flight; wait for [`Display::dispatch`]
-    /// to report it before presenting again.
-    pub fn present(&mut self, buffer: &WindowBuffer, rotation: Rotation) -> Result<(), KmsError> {
+    /// Copy `region` of `buffer` into the back buffer and queue it for the
+    /// next vertical blank. Only one flip may be in flight; wait for
+    /// [`Display::dispatch`] to report it before presenting again.
+    ///
+    /// The back buffer holds the frame presented *two* flips ago, so
+    /// `region` must cover what changed in the last two frames, not one;
+    /// the host keeps the previous frame's damage for exactly this.
+    pub fn present(
+        &mut self,
+        buffer: &WindowBuffer,
+        rotation: Rotation,
+        region: Rect,
+    ) -> Result<(), KmsError> {
         if self.flip_pending {
             return Err(KmsError::Display("a flip is already pending".into()));
         }
         let size = self.size();
         let back = 1 - self.front;
         let scanout = &mut self.buffers[back];
-        rotation.copy(buffer, size, &mut scanout.map[..], scanout.pitch);
+        rotation.copy(buffer, size, &mut scanout.map[..], scanout.pitch, region);
         self.card
             .page_flip(self.crtc, scanout.fb, PageFlipFlags::EVENT, None)
             .map_err(|e| KmsError::Display(format!("page flip failed: {e}")))?;

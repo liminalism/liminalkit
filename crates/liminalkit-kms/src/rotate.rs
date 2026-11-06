@@ -7,7 +7,7 @@
 //! second pass. Touch is mapped back through the inverse, from the same
 //! definition, and a test holds the two to each other.
 
-use liminalkit_raster::WindowBuffer;
+use liminalkit_raster::{Rect, WindowBuffer};
 
 /// How far the *image* is turned clockwise to appear upright on the panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -76,13 +76,32 @@ impl Rotation {
     /// arrays. Anything else takes [`Rotation::copy_bytes`], the reference
     /// the fast path is tested against. Rows are written in order, which is
     /// what write-combined scan-out memory wants.
-    pub fn copy(self, source: &WindowBuffer, panel: (u32, u32), dest: &mut [u8], pitch: usize) {
+    ///
+    /// Only `region`, in the source's own coordinates, is copied; the rest
+    /// of `dest` is left as it was. A frame that changed one clock label
+    /// moves a few kilobytes into scan-out memory instead of the whole
+    /// panel, which on a Pi sharing its memory bus with the display is the
+    /// difference that matters. The region is clipped to the source, and
+    /// a quarter turn may copy a little more than asked, rounded out to
+    /// whole tiles; what it copies is always right.
+    pub fn copy(
+        self,
+        source: &WindowBuffer,
+        panel: (u32, u32),
+        dest: &mut [u8],
+        pitch: usize,
+        region: Rect,
+    ) {
+        let region = region.intersect(source.bounds());
+        if region.is_empty() {
+            return;
+        }
         if cfg!(target_endian = "little") && pitch % 4 == 0 {
             if let Ok(words) = bytemuck::try_cast_slice_mut::<u8, u32>(dest) {
-                return self.copy_words(source, panel, words, pitch / 4);
+                return self.copy_words(source, panel, words, pitch / 4, region);
             }
         }
-        self.copy_bytes(source, panel, dest, pitch);
+        self.copy_bytes(source, panel, dest, pitch, region);
     }
 
     /// The reference copy: one pixel at a time, through [`Rotation::to_panel`]'s
@@ -93,11 +112,13 @@ impl Rotation {
         panel: (u32, u32),
         dest: &mut [u8],
         pitch: usize,
+        region: Rect,
     ) {
+        let region = region.intersect(source.bounds());
         let lw = source.width as usize;
-        for ly in 0..source.height {
-            for lx in 0..source.width {
-                let (px, py) = self.to_panel(panel, (lx, ly));
+        for ly in region.y..region.bottom() {
+            for lx in region.x..region.right() {
+                let (px, py) = self.to_panel(panel, (lx as u32, ly as u32));
                 let at = py as usize * pitch + px as usize * 4;
                 let pixel = source.pixels[ly as usize * lw + lx as usize];
                 dest[at..at + 4].copy_from_slice(&(pixel & 0x00ff_ffff).to_le_bytes());
@@ -105,14 +126,24 @@ impl Rotation {
         }
     }
 
-    fn copy_words(self, source: &WindowBuffer, panel: (u32, u32), dest: &mut [u32], stride: usize) {
+    fn copy_words(
+        self,
+        source: &WindowBuffer,
+        panel: (u32, u32),
+        dest: &mut [u32],
+        stride: usize,
+        region: Rect,
+    ) {
         const MASK: u32 = 0x00ff_ffff;
         let (pw, ph) = (panel.0 as usize, panel.1 as usize);
         let lw = source.width as usize;
+        let (x0, x1) = (region.x as usize, region.right() as usize);
+        let rows = region.y as usize..region.bottom() as usize;
         match self {
             Rotation::R0 => {
-                for (y, row) in source.pixels.chunks_exact(lw).take(ph).enumerate() {
-                    for (d, &s) in dest[y * stride..y * stride + pw].iter_mut().zip(row) {
+                for y in rows {
+                    let row = &source.pixels[y * lw + x0..y * lw + x1];
+                    for (d, &s) in dest[y * stride + x0..y * stride + x1].iter_mut().zip(row) {
                         *d = s & MASK;
                     }
                 }
@@ -122,8 +153,10 @@ impl Rotation {
                 // reversal from safe Rust here (a fixed-block version was
                 // tried; scripts/neon-report.sh shows no `rev64`). Mounting
                 // the panel the other way up makes this the straight copy.
-                for (y, row) in source.pixels.chunks_exact(lw).rev().take(ph).enumerate() {
-                    for (d, &s) in dest[y * stride..y * stride + pw]
+                for y in rows {
+                    let row = &source.pixels[y * lw + x0..y * lw + x1];
+                    let dy = ph - 1 - y;
+                    for (d, &s) in dest[dy * stride + pw - x1..dy * stride + pw - x0]
                         .iter_mut()
                         .zip(row.iter().rev())
                     {
@@ -131,7 +164,7 @@ impl Rotation {
                     }
                 }
             }
-            Rotation::R90 | Rotation::R270 => self.copy_turned(source, panel, dest, stride),
+            Rotation::R90 | Rotation::R270 => self.copy_turned(source, panel, dest, stride, region),
         }
     }
 
@@ -148,15 +181,22 @@ impl Rotation {
         panel: (u32, u32),
         dest: &mut [u32],
         stride: usize,
+        region: Rect,
     ) {
         const T: usize = 8;
         const MASK: u32 = 0x00ff_ffff;
         let (lw, lh) = (source.width as usize, source.height as usize);
         let (pw, ph) = (panel.0 as usize, panel.1 as usize);
         let (full_w, full_h) = (lw - lw % T, lh - lh % T);
+        let (rx0, rx1) = (region.x as usize, region.right() as usize);
+        let (ry0, ry1) = (region.y as usize, region.bottom() as usize);
+        // The tiles that touch the region, rounded out to whole tiles and
+        // kept inside the area tiles cover.
+        let tiles_x = rx0 - rx0 % T..rx1.div_ceil(T).min(full_w / T) * T;
+        let tiles_y = ry0 - ry0 % T..ry1.div_ceil(T).min(full_h / T) * T;
         let mut tile = [[0u32; T]; T];
-        for ly0 in (0..full_h).step_by(T) {
-            for lx0 in (0..full_w).step_by(T) {
+        for ly0 in tiles_y.step_by(T) {
+            for lx0 in tiles_x.clone().step_by(T) {
                 for (j, row) in tile.iter_mut().enumerate() {
                     let start = (ly0 + j) * lw + lx0;
                     row.copy_from_slice(&source.pixels[start..start + T]);
@@ -182,18 +222,19 @@ impl Rotation {
                 }
             }
         }
-        // The right and bottom edges of the source that do not fill a tile.
+        // The right and bottom edges of the source that do not fill a tile,
+        // where they meet the region.
         let mut edge = |lx: usize, ly: usize| {
             let (px, py) = self.to_panel(panel, (lx as u32, ly as u32));
             dest[py as usize * stride + px as usize] = source.pixels[ly * lw + lx] & MASK;
         };
-        for ly in 0..lh {
-            for lx in full_w..lw {
+        for ly in ry0..ry1 {
+            for lx in rx0.max(full_w)..rx1 {
                 edge(lx, ly);
             }
         }
-        for ly in full_h..lh {
-            for lx in 0..full_w {
+        for ly in ry0.max(full_h)..ry1 {
+            for lx in rx0..rx1.min(full_w) {
                 edge(lx, ly);
             }
         }
@@ -207,7 +248,7 @@ mod tests {
     const ALL: [Rotation; 4] = [Rotation::R0, Rotation::R90, Rotation::R180, Rotation::R270];
 
     /// Every logical pixel distinct, so a mis-mapped copy cannot hide.
-    fn numbered(width: u32, height: u32) -> WindowBuffer {
+    fn numbered(width: u32, height: u32) -> WindowBuffer<'static> {
         let mut buffer = WindowBuffer::new(width, height);
         for (i, p) in buffer.pixels.iter_mut().enumerate() {
             *p = i as u32 + 1;
@@ -254,6 +295,7 @@ mod tests {
                     panel,
                     bytemuck::cast_slice_mut(&mut words[..]),
                     pitch,
+                    source.bounds(),
                 );
                 assert_mapped(
                     rotation,
@@ -264,13 +306,71 @@ mod tests {
                 );
                 // Misaligned by one byte: the reference path, same answer.
                 let mut bytes = vec![0u8; pitch * panel.1 as usize + 1];
-                rotation.copy(&source, panel, &mut bytes[1..], pitch);
+                rotation.copy(&source, panel, &mut bytes[1..], pitch, source.bounds());
                 assert_mapped(rotation, panel, &source, &bytes[1..], pitch);
                 // The gap at the end of each row is never written.
                 for y in 0..panel.1 as usize {
                     let gap = &bytemuck::cast_slice::<u32, u8>(&words[..])
                         [y * pitch + panel.0 as usize * 4..(y + 1) * pitch];
                     assert!(gap.iter().all(|&b| b == 0), "{rotation:?} row {y}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_region_copy_writes_its_pixels_and_only_ever_right_ones() {
+        // What the region maps to is copied; everything else is either the
+        // sentinel it started as or, for a quarter turn's rounded-out tile,
+        // the right pixel anyway. Never a wrong one.
+        const SENTINEL: u32 = 0x00ee_ee00;
+        for panel in [(37, 21), (32, 16), (41, 24)] {
+            for rotation in ALL {
+                for aligned in [true, false] {
+                    let (lw, lh) = rotation.logical_size(panel);
+                    let source = numbered(lw, lh);
+                    let region = Rect::new(5, 3, 13, 11).intersect(source.bounds());
+                    let pitch = panel.0 as usize * 4 + 12;
+                    let mut bytes = vec![0u8; pitch * panel.1 as usize + 1];
+                    let dest = if aligned {
+                        &mut bytes[..]
+                    } else {
+                        &mut bytes[1..]
+                    };
+                    for px in dest.chunks_exact_mut(4).take(pitch / 4 * panel.1 as usize) {
+                        px.copy_from_slice(&SENTINEL.to_le_bytes());
+                    }
+                    rotation.copy(&source, panel, dest, pitch, region);
+                    let mut copied = 0;
+                    for ly in 0..lh {
+                        for lx in 0..lw {
+                            let (px, py) = rotation.to_panel(panel, (lx, ly));
+                            let at = py as usize * pitch + px as usize * 4;
+                            let got = u32::from_le_bytes(dest[at..at + 4].try_into().unwrap());
+                            let want = source.pixels[(ly * lw + lx) as usize];
+                            if region.contains(lx as i32, ly as i32) {
+                                assert_eq!(got, want, "{rotation:?} {panel:?} at {lx},{ly}");
+                            } else {
+                                assert!(
+                                    got == want || got == SENTINEL,
+                                    "{rotation:?} {panel:?} at {lx},{ly}: {got:#x}"
+                                );
+                            }
+                            copied += usize::from(got == want);
+                        }
+                    }
+                    // A straight copy and the reference path are exact; a
+                    // quarter turn rounds out to at most the tiles it touched.
+                    let exact = (region.w * region.h) as usize;
+                    let limit = if aligned && matches!(rotation, Rotation::R90 | Rotation::R270) {
+                        (region.w as usize + 14) * (region.h as usize + 14)
+                    } else {
+                        exact
+                    };
+                    assert!(
+                        (exact..=limit).contains(&copied),
+                        "{rotation:?} {panel:?} aligned={aligned}: {copied} copied"
+                    );
                 }
             }
         }
@@ -313,7 +413,7 @@ mod tests {
         let mut source = WindowBuffer::new(1, 1);
         source.pixels[0] = 0xff12_3456;
         let mut dest = [0xaau8; 4];
-        Rotation::R0.copy(&source, (1, 1), &mut dest, 4);
+        Rotation::R0.copy(&source, (1, 1), &mut dest, 4, source.bounds());
         assert_eq!(dest, [0x56, 0x34, 0x12, 0x00]);
     }
 }

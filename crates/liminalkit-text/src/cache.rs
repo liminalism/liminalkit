@@ -53,6 +53,10 @@ pub struct TextCache {
     /// Wholesale clears since creation — a frame that clears every frame is
     /// a cache too small for its screen.
     evictions: u64,
+    /// Rendered-text lookups, and the ones that had to shape and rasterize.
+    /// The ratio is what says whether the limits fit the screen.
+    lookups: u64,
+    misses: u64,
     /// Nested by style so the inner map can look up an `Rc<str>` with `&str`.
     /// A tuple key would construct a fresh owned `String` on every cache
     /// hit — an allocation for every label on every frame.
@@ -85,6 +89,29 @@ pub struct TextCache {
 /// More text-and-background pairs than any screen draws: 256 KiB of tables.
 const CURVE_LIMIT: usize = 1024;
 
+/// What a [`TextCache`] holds and how it has been used, from
+/// [`TextCache::stats`].
+///
+/// The limits are a ceiling, not an allocation: the cache holds what the
+/// screen has drawn, and `bitmap_bytes` is the real figure. `misses` that
+/// keep rising with `evictions` while the screen is not changing mean the
+/// working set is larger than the limits and every eviction re-rasterizes
+/// the screen; size the limits above `entries` and `bitmap_bytes` as seen
+/// on the fullest screen, and no more.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CacheStats {
+    pub entries: usize,
+    pub entry_limit: usize,
+    pub bitmap_bytes: usize,
+    pub bitmap_budget: usize,
+    /// Rendered-text lookups: every measure, baseline and draw.
+    pub lookups: u64,
+    /// Lookups that shaped and rasterized.
+    pub misses: u64,
+    /// Wholesale clears.
+    pub evictions: u64,
+}
+
 /// Byte ranges of the lines a string wraps into.
 pub type Lines = Rc<[std::ops::Range<usize>]>;
 
@@ -112,6 +139,8 @@ impl TextCache {
             entry_limit: entry_limit.max(1),
             bitmap_budget: bitmap_budget.max(1),
             evictions: 0,
+            lookups: 0,
+            misses: 0,
             entries: HashMap::new(),
             entry_count: 0,
             bitmap_bytes: 0,
@@ -261,6 +290,20 @@ impl TextCache {
         self.fitted_count
     }
 
+    /// Occupancy and traffic, for deciding the limits on a given machine:
+    /// run the screen, read this, and size the cache to what it holds.
+    pub fn stats(&self) -> CacheStats {
+        CacheStats {
+            entries: self.entry_count,
+            entry_limit: self.entry_limit,
+            bitmap_bytes: self.bitmap_bytes,
+            bitmap_budget: self.bitmap_budget,
+            lookups: self.lookups,
+            misses: self.misses,
+            evictions: self.evictions,
+        }
+    }
+
     fn rendered(&mut self, text: &str, style: TextStyle) -> &RenderedText {
         let size_key = style_key(style);
         let missing = self
@@ -268,7 +311,9 @@ impl TextCache {
             .get(&size_key)
             .and_then(|bucket| bucket.get(text))
             .is_none();
+        self.lookups += 1;
         if missing {
+            self.misses += 1;
             let rendered = text::render_with(self.fonts, style, text, &self.rendering);
             let bytes = rendered.bitmap.pixels.capacity();
             if self.entry_count >= self.entry_limit
@@ -732,7 +777,7 @@ mod tests {
         let mut painter = Painter::new(&mut buffer);
         painter.clear(background);
         cache.draw(&mut painter, "Settings minimum", 4, 4, style(15.0), color);
-        buffer.pixels
+        buffer.pixels.to_vec()
     }
 
     /// How far the pixels moved from the background toward the text colour,
@@ -817,7 +862,7 @@ mod tests {
         }
         assert_eq!(
             drawn(TextRendering::UNCORRECTED, 0x00f6_f6f4, 0x001c_1c1e),
-            expected.pixels
+            expected.pixels.to_vec()
         );
     }
 

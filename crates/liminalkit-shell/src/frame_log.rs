@@ -15,6 +15,9 @@ pub struct FrameTimer {
     present: Vec<Duration>,
     /// Input event → present, for frames that had an input timestamp.
     input_to_present: Vec<Duration>,
+    /// The share of the buffer each frame repainted, 0..=1. A screen that
+    /// repaints only what changed shows it here; a full repaint is 1.
+    damage: Vec<f32>,
     window_start: Instant,
     /// Print interval.
     every: Duration,
@@ -42,6 +45,7 @@ impl FrameTimer {
             paint: Vec::new(),
             present: Vec::new(),
             input_to_present: Vec::new(),
+            damage: Vec::new(),
             window_start: Instant::now(),
             every: Duration::from_secs(2),
             budget,
@@ -76,6 +80,21 @@ impl FrameTimer {
         if self.enabled && self.window_start.elapsed() >= self.every {
             self.flush();
         }
+    }
+
+    /// How much of a buffer of `pixels` the frame just recorded repainted.
+    /// Separate from [`Self::record_full`] so hosts that do not track damage
+    /// need not say so.
+    pub fn record_damage(&mut self, damage: liminalkit_raster::Rect, pixels: usize) {
+        if pixels == 0 {
+            return;
+        }
+        let painted = damage.w.max(0) as usize * damage.h.max(0) as usize;
+        let share = (painted as f32 / pixels as f32).min(1.0);
+        if self.damage.len() >= SAMPLE_CAP {
+            self.damage.drain(..SAMPLE_CAP / 2);
+        }
+        self.damage.push(share);
     }
 
     /// Percentiles for the samples currently held. Does not reset them.
@@ -122,20 +141,33 @@ impl FrameTimer {
         } else {
             line("input→present", &mut input)
         };
+        let damage_line = if self.damage.is_empty() {
+            String::new()
+        } else {
+            self.damage.sort_by(f32::total_cmp);
+            let pick = |q: f64| self.damage[((self.damage.len() - 1) as f64 * q).round() as usize];
+            format!(
+                " | repainted p50 {:>3.0}% max {:>3.0}%",
+                pick(0.5) * 100.0,
+                self.damage[self.damage.len() - 1] * 100.0
+            )
+        };
         eprintln!(
-            "[frames] {frames} in {secs:.1}s ({:.1}/s) | {} | {} | {} | {} | {}{}",
+            "[frames] {frames} in {secs:.1}s ({:.1}/s) | {} | {} | {} | {} | {}{}{}",
             frames as f64 / secs,
             line("tick", &mut self.tick),
             line("paint", &mut self.paint),
             line("present", &mut self.present),
             line("total", &mut total),
             input_line,
+            damage_line,
             over.unwrap_or_default()
         );
         self.tick.clear();
         self.paint.clear();
         self.present.clear();
         self.input_to_present.clear();
+        self.damage.clear();
         self.window_start = Instant::now();
     }
 }

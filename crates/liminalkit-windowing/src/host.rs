@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::present::SoftbufferPresenter;
-use liminalkit_raster::WindowBuffer;
+use liminalkit_raster::{Rect, WindowBuffer};
 use liminalkit_shell::{
     FrameTimer, KeyInput, Modifiers, MouseButton, PresentError, Presenter, Scale, TouchEvent,
     TouchId, TouchState,
@@ -191,8 +191,19 @@ pub struct ImeCursorArea {
 }
 
 pub trait PixelApp {
-    /// Paint the whole frame. `buffer` is the window's physical size;
-    /// `scale` converts the logical units layout is written in.
+    /// Paint the frame. `buffer` is the window's physical size; `scale`
+    /// converts the logical units layout is written in.
+    ///
+    /// Painting everything is always right. An application that knows what
+    /// changed may paint less: `buffer.stale` is the part of the buffer
+    /// that does not hold the frame this application drew last (all of it
+    /// on the first frame and after a resize, nothing on a presenter that
+    /// keeps the previous frame), so clipping the painter to
+    /// `buffer.stale.union(changed)` before drawing as usual repaints
+    /// exactly what must be repainted. Controls outside the clip still run
+    /// and still answer; only their pixels are skipped. The painter records
+    /// what it wrote in `buffer.damage`, and the host shows that and nothing
+    /// else.
     fn render(&mut self, buffer: &mut WindowBuffer, scale: Scale);
 
     /// The window moved to a display with a different scale factor. The
@@ -453,7 +464,6 @@ struct Slot {
     /// A one-shot factory for this slot's presenter, from
     /// [`run_app_with_presenter`]. Taken when the window is created.
     presenter_factory: Option<PresenterFactory>,
-    buffer: WindowBuffer,
     scale: Scale,
     timer: FrameTimer,
     /// Duration of the most recent `tick`, recorded into the next present.
@@ -500,20 +510,11 @@ struct Surface {
     size: Option<(u32, u32)>,
 }
 impl Surface {
-    fn resize(
-        &mut self,
-        buffer: &mut WindowBuffer,
-        width: u32,
-        height: u32,
-    ) -> Result<(), PresentError> {
+    fn resize(&mut self, width: u32, height: u32) -> Result<(), PresentError> {
         if self.size != Some((width, height)) {
-            // Failed resizes remain pending, even if the CPU buffer happens to
-            // already have the requested dimensions.
+            // A failed resize stays pending until the backend accepts it.
             self.presenter.resize(width, height)?;
             self.size = Some((width, height));
-        }
-        if (buffer.width, buffer.height) != (width, height) {
-            buffer.resize(width, height);
         }
         Ok(())
     }
@@ -530,7 +531,6 @@ impl Slot {
             config,
             native: NativeState::Pending,
             presenter_factory,
-            buffer: WindowBuffer::new(1, 1),
             scale: Scale::ONE,
             timer: FrameTimer::from_env(),
             pending_tick: Duration::ZERO,
@@ -631,26 +631,29 @@ impl Slot {
         if size.width == 0 || size.height == 0 {
             return;
         }
-        if let Err(error) = native
-            .surface
-            .resize(&mut self.buffer, size.width, size.height)
-        {
+        if let Err(error) = native.surface.resize(size.width, size.height) {
             self.app.on_host_error(&error.to_string());
             return;
         }
         let started = Instant::now();
-        self.app.render(&mut self.buffer, self.scale);
-        let painted = Instant::now();
+        let mut painted = started;
+        let mut damage = Rect::default();
+        let (app, scale) = (&mut self.app, self.scale);
+        let shown = native.surface.presenter.present(&mut |buffer| {
+            app.render(buffer, scale);
+            painted = Instant::now();
+            damage = buffer.damage.intersect(buffer.bounds());
+        });
+        if let Err(error) = shown {
+            self.app.on_host_error(&error.to_string());
+            return;
+        }
+        let presented = Instant::now();
         if self.app.ime_allowed() {
             apply_ime(window, self.app.ime_cursor_area());
         } else {
             window.set_ime_allowed(false);
         }
-        if let Err(error) = native.surface.presenter.present(&self.buffer) {
-            self.app.on_host_error(&error.to_string());
-            return;
-        }
-        let presented = Instant::now();
         let input_to_present = self
             .input_at
             .take()
@@ -663,6 +666,8 @@ impl Slot {
             presented - painted,
             input_to_present,
         );
+        self.timer
+            .record_damage(damage, size.width as usize * size.height as usize);
         // After the present, so a screen reader is never told about a frame
         // the eyes cannot see yet.
         self.publish_accessibility();
@@ -1570,7 +1575,10 @@ mod tests {
                     Ok(())
                 }
             }
-            fn present(&mut self, _: &WindowBuffer) -> Result<(), PresentError> {
+            fn present(
+                &mut self,
+                _: &mut dyn FnMut(&mut WindowBuffer<'_>),
+            ) -> Result<(), PresentError> {
                 Ok(())
             }
             fn backend(&self) -> liminalkit_shell::PresenterBackend {
@@ -1582,12 +1590,10 @@ mod tests {
             presenter: Box::new(FlakyPresenter(calls.clone())),
             size: None,
         };
-        // Buffer dimensions alone are not evidence that the native resize succeeded.
-        let mut buffer = WindowBuffer::new(200, 100);
-        assert!(surface.resize(&mut buffer, 200, 100).is_err());
+        assert!(surface.resize(200, 100).is_err());
         assert_eq!(surface.size, None);
-        surface.resize(&mut buffer, 200, 100).unwrap();
-        surface.resize(&mut buffer, 200, 100).unwrap();
+        surface.resize(200, 100).unwrap();
+        surface.resize(200, 100).unwrap();
         assert_eq!(calls.get(), 2);
         assert_eq!(surface.size, Some((200, 100)));
     }
