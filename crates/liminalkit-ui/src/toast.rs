@@ -216,7 +216,7 @@ impl Ui<'_> {
         let scale = self.scale;
         let layout = toast_layout(self.text, &theme, scale, origin, width, card);
         let area = Rect::new(origin.0, origin.1, width.max(1), layout.height);
-        self.painter.rounded_rect(
+        self.rounded(
             area,
             self.px(theme.corner_radius),
             self.px(theme.border_width),
@@ -295,7 +295,7 @@ impl Ui<'_> {
         } else {
             theme.panel
         };
-        self.painter.rounded_rect(
+        self.rounded(
             layout.dismiss,
             self.px(theme.corner_radius),
             if dismiss_focused {
@@ -336,7 +336,7 @@ impl Ui<'_> {
             } else {
                 theme.panel
             };
-            self.painter.rounded_rect(
+            self.rounded(
                 *chip,
                 self.px(theme.corner_radius),
                 if focused {

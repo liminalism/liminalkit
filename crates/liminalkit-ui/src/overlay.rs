@@ -223,7 +223,7 @@ impl Overlay {
         }
         ui.painter
             .shadow_rect(rect, ui.px(3), ui.px(6), 0x0010_1010, 50);
-        ui.painter.rounded_rect(
+        ui.rounded(
             rect,
             ui.px(theme.corner_radius),
             ui.px(theme.border_width),

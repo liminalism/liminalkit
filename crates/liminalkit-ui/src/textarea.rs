@@ -275,7 +275,7 @@ impl Ui<'_> {
                 state.field.caret(),
             );
         }
-        self.painter.rounded_rect(
+        self.rounded(
             area,
             self.px(theme.corner_radius),
             if focused {

@@ -135,6 +135,8 @@ pub struct Ui<'a> {
     pub scale: Scale,
     /// Scratch for anti-aliased shapes.
     pub kernel: &'a mut RasterKernel,
+    /// Draw rounded surfaces anti-aliased ([`Ui::set_smooth_edges`]).
+    smooth_edges: bool,
     focus: Option<&'a mut crate::Focus>,
     #[cfg(feature = "accessibility")]
     pub(crate) semantics: Option<&'a mut crate::semantics::Semantics>,
@@ -158,9 +160,48 @@ impl<'a> Ui<'a> {
             theme,
             scale,
             kernel,
+            smooth_edges: false,
             focus: None,
             #[cfg(feature = "accessibility")]
             semantics: None,
+        }
+    }
+
+    /// Draw every rounded surface — buttons, panels, fields, menus, toasts,
+    /// badges, bars — anti-aliased instead of with whole-pixel corner steps.
+    ///
+    /// Off by default: the stepped corners cost no path rasterization, which
+    /// matters on a Raspberry Pi redrawing a full screen, and every existing
+    /// golden screen was made with them. A desktop app at native resolution
+    /// turns it on for smooth corners.
+    pub fn set_smooth_edges(&mut self, on: bool) {
+        self.smooth_edges = on;
+    }
+
+    /// [`Ui::set_smooth_edges`] as a builder.
+    #[must_use]
+    pub fn with_smooth_edges(mut self, on: bool) -> Self {
+        self.smooth_edges = on;
+        self
+    }
+
+    /// A rounded surface with a border, anti-aliased when smooth edges are on.
+    pub fn rounded(&mut self, rect: Rect, radius: i32, border: i32, fill: u32, edge: u32) {
+        if self.smooth_edges {
+            self.painter
+                .rounded_rect_aa(self.kernel, rect, radius as f32, border, fill, edge);
+        } else {
+            self.painter.rounded_rect(rect, radius, border, fill, edge);
+        }
+    }
+
+    /// A filled rounded shape, anti-aliased when smooth edges are on.
+    pub fn fill_rounded(&mut self, rect: Rect, radius: i32, colour: u32) {
+        if self.smooth_edges {
+            self.painter
+                .fill_rounded_rect_aa(self.kernel, rect, radius as f32, colour, 255);
+        } else {
+            self.painter.fill_rounded_rect(rect, radius, colour);
         }
     }
 
@@ -241,7 +282,7 @@ impl<'a> Ui<'a> {
 
     /// A rounded surface, returning the area inside its content padding.
     pub fn surface(&mut self, area: Rect, fill: u32, edge: u32) -> Rect {
-        self.painter.rounded_rect(
+        self.rounded(
             area,
             self.px(self.theme.corner_radius),
             self.px(self.theme.border_width),
@@ -313,7 +354,7 @@ impl<'a> Ui<'a> {
         } else {
             self.theme.panel
         };
-        self.painter.rounded_rect(
+        self.rounded(
             area,
             self.px(self.theme.corner_radius),
             if focused {
@@ -361,7 +402,7 @@ impl<'a> Ui<'a> {
             } else {
                 self.theme.panel
             };
-            self.painter.rounded_rect(
+            self.rounded(
                 tab.inset(self.px(2)),
                 self.px(self.theme.corner_radius),
                 self.px(self.theme.border_width),
@@ -387,23 +428,18 @@ impl<'a> Ui<'a> {
     /// `fraction` is clamped, because a share computed from figures that do
     /// not quite agree should draw a full bar rather than run off the panel.
     pub fn bar(&mut self, area: Rect, fraction: f64, colour: u32) {
-        self.painter
-            .fill_rounded_rect(area, area.h / 2, self.theme.hover);
+        self.fill_rounded(area, area.h / 2, self.theme.hover);
         let fraction = fraction.clamp(0.0, 1.0);
         let width = (area.w as f64 * fraction).round() as i32;
         if width > 0 {
-            self.painter.fill_rounded_rect(
-                Rect::new(area.x, area.y, width, area.h),
-                area.h / 2,
-                colour,
-            );
+            self.fill_rounded(Rect::new(area.x, area.y, width, area.h), area.h / 2, colour);
         }
     }
 
     /// A compact status label with a quiet tinted surface.
     pub fn badge(&mut self, area: Rect, label: &str, text: u32, fill: u32, edge: u32) {
         let badge = area.inset(self.px(4));
-        self.painter.rounded_rect(
+        self.rounded(
             badge,
             self.px((self.theme.corner_radius - 1).max(0)),
             self.px(self.theme.border_width),
@@ -418,7 +454,7 @@ impl<'a> Ui<'a> {
     pub fn swatch(&mut self, area: Rect, label: &str, text: u32, fill: u32, align: Align) {
         let side = self.px(10);
         let square = Rect::new(area.x, area.y + (area.h - side) / 2, side, side);
-        self.painter.fill_rounded_rect(square, self.px(2), fill);
+        self.fill_rounded(square, self.px(2), fill);
         let gap = side + self.px(8);
         let rest = Rect::new(area.x + gap, area.y, (area.w - gap).max(0), area.h);
         self.label(rest, label, text, align);
@@ -1859,7 +1895,7 @@ impl Ui<'_> {
             );
         }
         let theme = self.theme;
-        self.painter.rounded_rect(
+        self.rounded(
             area,
             self.px(theme.corner_radius),
             if focused {
@@ -2953,5 +2989,58 @@ mod clipboard_interaction_tests {
         state.insert_str("ชื่อ😀.txt");
         assert_eq!(state.text(), "aชื่อ😀.txt");
         assert_eq!(state.caret(), state.text().len());
+    }
+}
+
+#[cfg(test)]
+mod smooth_edge_tests {
+    use super::*;
+    use liminalkit_raster::WindowBuffer;
+    use liminalkit_test_fonts::set;
+
+    fn button_frame(smooth: Option<bool>) -> WindowBuffer {
+        let mut buffer = WindowBuffer::new(120, 40);
+        let mut text = TextCache::new(set());
+        let mut kernel = RasterKernel::new();
+        let mut input = Input::new();
+        {
+            let mut ui = Ui::new(
+                Painter::new(&mut buffer),
+                &mut text,
+                &mut input,
+                Theme::default(),
+                Scale(1.5),
+                &mut kernel,
+            );
+            if let Some(on) = smooth {
+                ui.set_smooth_edges(on);
+            }
+            ui.painter.clear(0x203040);
+            ui.button(Rect::new(4, 4, 112, 32), "");
+        }
+        buffer
+    }
+
+    #[test]
+    fn smooth_edges_are_off_by_default_and_change_only_the_corners() {
+        let default = button_frame(None);
+        assert_eq!(
+            default.pixels,
+            button_frame(Some(false)).pixels,
+            "off by default"
+        );
+        let smooth = button_frame(Some(true));
+        let differing: Vec<(usize, usize)> = (0..40)
+            .flat_map(|y| (0..120).map(move |x| (x, y)))
+            .filter(|&(x, y)| default.pixels[y * 120 + x] != smooth.pixels[y * 120 + x])
+            .collect();
+        assert!(!differing.is_empty(), "smooth edges change something");
+        // Every changed pixel is near one of the four corners.
+        let radius = Scale(1.5).px(Theme::default().corner_radius) + 2;
+        for (x, y) in differing {
+            let near_x = x < (4 + radius) as usize || x >= (116 - radius) as usize;
+            let near_y = y < (4 + radius) as usize || y >= (36 - radius) as usize;
+            assert!(near_x && near_y, "({x},{y}) is not at a corner");
+        }
     }
 }

@@ -146,6 +146,36 @@ impl Painter<'_> {
         self.fill_path(kernel, &mut path, color, alpha);
     }
 
+    /// Anti-aliased rounded surface with a border: the whole shape in `edge`,
+    /// then the shape inset by `border` in `fill`, so the border is the
+    /// difference and both of its curves are smooth. The anti-aliased twin of
+    /// [`Painter::rounded_rect`]; straight edges on whole-pixel `rect`s stay
+    /// exactly on their pixels.
+    pub fn rounded_rect_aa(
+        &mut self,
+        kernel: &mut RasterKernel,
+        rect: Rect,
+        radius: f32,
+        border: i32,
+        fill: u32,
+        edge: u32,
+    ) {
+        if rect.is_empty() {
+            return;
+        }
+        let radius = radius.clamp(0.0, rect.w.min(rect.h) as f32 / 2.0);
+        let border = border.max(0);
+        if border == 0 {
+            self.fill_rounded_rect_aa(kernel, rect, radius, fill, 255);
+            return;
+        }
+        self.fill_rounded_rect_aa(kernel, rect, radius, edge, 255);
+        let inner = rect.inset(border);
+        if !inner.is_empty() {
+            self.fill_rounded_rect_aa(kernel, inner, (radius - border as f32).max(0.0), fill, 255);
+        }
+    }
+
     /// Anti-aliased polyline stroke (butt caps, unjoined segments).
     pub fn stroke_polyline_aa(
         &mut self,
@@ -236,6 +266,57 @@ mod tests {
         }
         // The centre column just inside the clip is fully lit.
         assert_eq!(buffer.pixels[20 * 40 + 19], 0xffffff);
+    }
+
+    #[test]
+    fn the_smooth_rounded_surface_matches_the_stepped_one_except_at_its_corners() {
+        // Same rect, radius and border through both paths: straight edges on
+        // whole pixels land on the same pixels, and only the corners differ —
+        // with in-between shades where the stepped version has none.
+        let (w, h) = (60, 40);
+        let rect = Rect::new(5, 5, 50, 30);
+        let (fill, edge, back) = (0xF0E0C0, 0x803030, 0x000000);
+        let mut stepped = WindowBuffer::new(w, h);
+        {
+            let mut painter = Painter::new(&mut stepped);
+            painter.clear(back);
+            painter.rounded_rect(rect, 8, 1, fill, edge);
+        }
+        let mut smooth = WindowBuffer::new(w, h);
+        {
+            let mut painter = Painter::new(&mut smooth);
+            let mut kernel = RasterKernel::new();
+            painter.clear(back);
+            painter.rounded_rect_aa(&mut kernel, rect, 8.0, 1, fill, edge);
+        }
+        let at =
+            |b: &WindowBuffer, x: i32, y: i32| b.pixels[(y * w as i32 + x) as usize] & 0xFF_FFFF;
+        // Mid-edge pixels: border colour on the outline, fill inside, back outside.
+        for (x, y, want) in [
+            (30, 5, edge),
+            (30, 34, edge),
+            (5, 20, edge),
+            (54, 20, edge),
+            (30, 20, fill),
+            (30, 4, back),
+        ] {
+            assert_eq!(at(&stepped, x, y), want, "stepped ({x},{y})");
+            assert_eq!(at(&smooth, x, y), want, "smooth ({x},{y})");
+        }
+        // The top-left corner has partly covered pixels when smooth.
+        let shades = |b: &WindowBuffer| {
+            let mut found = std::collections::BTreeSet::new();
+            for y in 5..13 {
+                for x in 5..13 {
+                    found.insert(at(b, x, y));
+                }
+            }
+            found.len()
+        };
+        assert!(
+            shades(&smooth) > shades(&stepped) + 2,
+            "smooth corners blend"
+        );
     }
 
     #[test]

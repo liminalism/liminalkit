@@ -175,7 +175,7 @@ impl Dropdown {
         ui.painter.push_clip(bounds);
         ui.painter
             .shadow_rect(rect, ui.px(2), ui.px(3), 0x0010_1010, 40);
-        ui.painter.rounded_rect(
+        ui.rounded(
             rect,
             ui.px(theme.corner_radius),
             ui.px(theme.border_width),
@@ -321,7 +321,7 @@ impl Ui<'_> {
         } else {
             theme.panel
         };
-        self.painter.rounded_rect(
+        self.rounded(
             area,
             self.px(theme.corner_radius),
             if focused {

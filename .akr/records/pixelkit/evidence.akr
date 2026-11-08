@@ -190,6 +190,20 @@ record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
         """
 }
 
+record pixelkit.evidence.smooth-rounded-surfaces-suite/1 : evidence {
+    title "Windows 11, uncommitted tree on bc2eff3. Full suite 575 passed, 0 failed; no clippy findings in the changed code. New tests: the_smooth_rounded_surface_matches_the_stepped_one_except_at_its_corners (mid-edge pixels identical, corners gain shades) and smooth_edges_are_off_by_default_and_change_only_the_corners (switch off equals default byte for byte; switch on changes only pixels within a corner radius). In Lege's GUI at 1x and 1.5x, button and field corners render smooth where they were stepped."
+    state verified
+    result pass
+    method command
+    observed_at git:bc2eff379dd9cdc6cb2b78e7932ed16583781cf9
+    command "cargo test --no-fail-fast; cargo clippy --all-targets; Lege lege-gui --snapshot at 1x and 1.5x before/after"
+    artifact "crates/liminalkit-raster/src/shapes.rs"
+    summary """
+        Windows 11, uncommitted tree on bc2eff3. Full suite 575 passed, 0 failed; no clippy findings in the changed code. New tests: the_smooth_rounded_surface_matches_the_stepped_one_except_at_its_corners (mid-edge pixels identical, corners gain shades) and smooth_edges_are_off_by_default_and_change_only_the_corners (switch off equals default byte for byte; switch on changes only pixels within a corner radius). In Lege's GUI at 1x and 1.5x, button and field corners render smooth where they were stepped.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.table-swatch-cell-20261106/1 : evidence {
     title "Cell::swatch / CellAppearance::Swatch / Ui::swatch: a small square of the fill at the cell's leading edge, text after it. New test a_swatch_cell_shows_its_colour_before_its_text; liminalkit-ui 179 + 1 pass; fmt clean. First user: the salon Mac staff list, which dropped its Color column of colour names."
     state verified

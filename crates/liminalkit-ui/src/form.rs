@@ -63,7 +63,7 @@ impl Ui<'_> {
         } else {
             theme.panel_edge
         };
-        self.painter.rounded_rect(
+        self.rounded(
             box_rect,
             self.px(4),
             if focused {
@@ -150,7 +150,7 @@ impl Ui<'_> {
         } else {
             theme.panel_edge
         };
-        self.painter.fill_rounded_rect(track, track_h / 2, fill);
+        self.fill_rounded(track, track_h / 2, fill);
 
         let margin = self.px(2);
         let knob_r = (track_h - margin * 2) as f32 / 2.0;

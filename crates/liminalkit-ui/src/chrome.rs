@@ -52,8 +52,8 @@ impl Ui<'_> {
         };
         let radius = self.px(colours.radius);
         if radius > 0 {
-            self.painter
-                .rounded_rect(area, radius, self.scale.hairline(), fill, edge);
+            let hairline = self.scale.hairline();
+            self.rounded(area, radius, hairline, fill, edge);
         } else {
             self.painter.fill_rect(area, fill);
             self.painter.stroke_rect(area, self.scale.hairline(), edge);

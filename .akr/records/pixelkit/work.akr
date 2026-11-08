@@ -221,6 +221,49 @@ record pixelkit.work.raster-simd-coverage/1 : work {
         """
 }
 
+record pixelkit.work.smooth-rounded-surfaces/1 : work {
+    title "Opt-in anti-aliased rounded surfaces for widgets (Ui::set_smooth_edges)"
+    state completed
+    scope [
+        path "crates/liminalkit-raster/src/shapes.rs",
+        path "crates/liminalkit-ui/src/chrome.rs",
+        path "crates/liminalkit-ui/src/dropdown.rs",
+        path "crates/liminalkit-ui/src/form.rs",
+        path "crates/liminalkit-ui/src/overlay.rs",
+        path "crates/liminalkit-ui/src/textarea.rs",
+        path "crates/liminalkit-ui/src/toast.rs",
+        path "crates/liminalkit-ui/src/widget.rs"
+    ]
+    intent """
+        Give desktop apps smooth rounded surfaces without changing anything for existing apps. Ui gains an
+        opt-in `set_smooth_edges` / `with_smooth_edges` switch (off by default); with it on, every rounded
+        surface the widgets draw (buttons, panels, fields, dropdowns, menus, overlays, toasts, badges, bars,
+        tabs, text buttons) goes through `Ui::rounded` / `Ui::fill_rounded`, which use the analytic
+        anti-aliased path fill, via a new `Painter::rounded_rect_aa` (outer shape in the edge colour, inset
+        shape in the fill colour). Off, output is byte-identical to before, so golden screens and Raspberry
+        Pi redraw cost are unaffected. Requested for Lege's desktop GUI, whose button outlines were stepped.
+        """
+    acceptance {
+        check smooth-corners {
+            statement """
+                With the switch on, only corner pixels change and they gain intermediate shades; straight edges on whole pixels stay on the same pixels.
+                """
+            method command
+            command "cargo test -p liminalkit-raster the_smooth && cargo test -p liminalkit-ui smooth_edges"
+            verified_by [ @pixelkit.evidence.smooth-rounded-surfaces-suite/1 ]
+        }
+        check unchanged-by-default {
+            statement """
+                Without the switch, a frame is byte-identical to before (the existing suites pass unchanged, and a button drawn with the switch off equals one drawn without touching it).
+                """
+            method command
+            command "cargo test --no-fail-fast"
+            verified_by [ @pixelkit.evidence.smooth-rounded-surfaces-suite/1 ]
+        }
+    }
+    author "dk"
+}
+
 record pixelkit.work.text-rendering-quality/1 : work {
     title "Gamma-corrected text coverage, opt-in vertical hinting and stem darkening"
     state completed
