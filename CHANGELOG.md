@@ -45,6 +45,11 @@ than the one it was extracted from can pick up.
 
 ### Added
 
+- `CursorShape::Grab` and `CursorShape::Grabbing`: an open and a closed hand
+  for something that can be picked up and dragged. Windows has no hand cursor
+  (winit maps `Grab` to the four-way move arrows), so the host draws the hands
+  itself (`cursors::hand_cursor`), sized to the display scale and redrawn
+  when it changes; macOS and Linux use the cursor theme's hands.
 - A table cell can show a colour rather than name it:
   `Cell::swatch(text, fill)` (`CellAppearance::Swatch`) draws a small square
   of `fill` at the cell's leading edge and the text after it, and

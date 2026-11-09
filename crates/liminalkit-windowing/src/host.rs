@@ -469,6 +469,9 @@ struct Slot {
     next_tick: Option<Instant>,
     /// The pointer shape last set on the window.
     cursor_shape: CursorShape,
+    /// The edge length a drawn cursor (the hands) was last made at, so a
+    /// change of display scale redraws it at the new size.
+    cursor_size: u16,
 }
 
 /// Window and presenter are published together only after successful creation.
@@ -541,6 +544,7 @@ impl Slot {
             native_focused: true,
             next_tick: None,
             cursor_shape: CursorShape::Default,
+            cursor_size: 0,
         }
     }
 
@@ -718,6 +722,9 @@ struct Shell {
     incoming: Option<IncomingWindows>,
     waker: Waker,
     failure: Option<String>,
+    /// Drawn cursors, made once per (closed hand, size) and shared by every
+    /// window.
+    custom_cursors: std::collections::HashMap<(bool, u16), winit::window::CustomCursor>,
     #[cfg(feature = "accessibility")]
     proxy: EventLoopProxy<Host>,
 }
@@ -1067,29 +1074,70 @@ fn drain_title<A: PixelApp + ?Sized>(app: &mut A, window: Option<&Window>) {
     }
 }
 
-/// Apply a full-screen request and a pointer-shape change, if any.
+/// Apply a full-screen request and a pointer-shape change, if any. `size` is
+/// the edge length drawn cursors should have at the window's scale; a drawn
+/// cursor is re-applied when it changes. `resolve` turns a shape into the
+/// platform cursor.
 fn drain_window_state<A: PixelApp + ?Sized>(
     app: &mut A,
     window: Option<&Window>,
     shape: &mut CursorShape,
+    applied_size: &mut u16,
+    size: u16,
+    resolve: &mut dyn FnMut(CursorShape, u16) -> winit::window::Cursor,
 ) {
     let Some(window) = window else { return };
     if let Some(full) = app.poll_fullscreen() {
         window.set_fullscreen(full.then_some(winit::window::Fullscreen::Borderless(None)));
     }
     let wanted = app.cursor_shape();
-    if wanted != *shape {
+    let drawn = wanted.is_drawn();
+    if wanted != *shape || (drawn && size != *applied_size) {
         *shape = wanted;
-        window.set_cursor(match wanted {
-            CursorShape::Default => winit::window::CursorIcon::Default,
-            CursorShape::Text => winit::window::CursorIcon::Text,
-            CursorShape::Pointer => winit::window::CursorIcon::Pointer,
-            CursorShape::ResizeHorizontal => winit::window::CursorIcon::EwResize,
-            CursorShape::ResizeVertical => winit::window::CursorIcon::NsResize,
-            CursorShape::ResizeDiagonalTlBr => winit::window::CursorIcon::NwseResize,
-            CursorShape::ResizeDiagonalTrBl => winit::window::CursorIcon::NeswResize,
-        });
+        *applied_size = size;
+        window.set_cursor(resolve(wanted, size));
     }
+}
+
+/// The platform's cursor for `shape`. The hands are drawn on Windows, which
+/// has none of its own (see `cursors`); everywhere else they are the theme's.
+fn platform_cursor(
+    event_loop: &ActiveEventLoop,
+    cache: &mut std::collections::HashMap<(bool, u16), winit::window::CustomCursor>,
+    shape: CursorShape,
+    size: u16,
+) -> winit::window::Cursor {
+    use winit::window::CursorIcon;
+    let icon = match shape {
+        CursorShape::Default => CursorIcon::Default,
+        CursorShape::Text => CursorIcon::Text,
+        CursorShape::Pointer => CursorIcon::Pointer,
+        CursorShape::ResizeHorizontal => CursorIcon::EwResize,
+        CursorShape::ResizeVertical => CursorIcon::NsResize,
+        CursorShape::ResizeDiagonalTlBr => CursorIcon::NwseResize,
+        CursorShape::ResizeDiagonalTrBl => CursorIcon::NeswResize,
+        CursorShape::Grab => CursorIcon::Grab,
+        CursorShape::Grabbing => CursorIcon::Grabbing,
+    };
+    if shape.is_drawn() {
+        let closed = shape == CursorShape::Grabbing;
+        if let Some(cursor) = cache.get(&(closed, size)) {
+            return cursor.clone().into();
+        }
+        let image = crate::cursors::hand_cursor(closed, size);
+        if let Ok(source) = winit::window::CustomCursor::from_rgba(
+            image.rgba,
+            image.width,
+            image.height,
+            image.hotspot_x,
+            image.hotspot_y,
+        ) {
+            let cursor = event_loop.create_custom_cursor(source);
+            cache.insert((closed, size), cursor.clone());
+            return cursor.into();
+        }
+    }
+    icon.into()
 }
 
 /// Pointer shapes an application can ask for.
@@ -1110,6 +1158,20 @@ pub enum CursorShape {
     ResizeDiagonalTlBr,
     /// A top-right to bottom-left arrow over a `/` corner handle.
     ResizeDiagonalTrBl,
+    /// An open hand over something that can be picked up and dragged: a file
+    /// tile, a card, a canvas to pan. Drawn by the toolkit on Windows, which
+    /// has no hand of its own; the cursor theme's elsewhere.
+    Grab,
+    /// A closed hand while it is being dragged.
+    Grabbing,
+}
+
+impl CursorShape {
+    /// Whether the toolkit draws this shape itself on this platform rather
+    /// than asking for a system cursor.
+    pub fn is_drawn(self) -> bool {
+        cfg!(target_os = "windows") && matches!(self, CursorShape::Grab | CursorShape::Grabbing)
+    }
 }
 
 /// Whether an interval-driven repaint is due, and when the next one is.
@@ -1378,9 +1440,20 @@ impl ApplicationHandler<Host> for Shell {
         for slot in &mut self.slots {
             slot.run_tick();
         }
+        let cursors = &mut self.custom_cursors;
+        let mut resolve =
+            |shape: CursorShape, size: u16| platform_cursor(event_loop, cursors, shape, size);
         for slot in &mut self.slots {
             drain_title(&mut *slot.app, slot.native.window());
-            drain_window_state(&mut *slot.app, slot.native.window(), &mut slot.cursor_shape);
+            let size = crate::cursors::cursor_size(slot.scale.0);
+            drain_window_state(
+                &mut *slot.app,
+                slot.native.window(),
+                &mut slot.cursor_shape,
+                &mut slot.cursor_size,
+                size,
+                &mut resolve,
+            );
         }
         if self.slots.iter().any(|slot| slot.app.should_exit()) {
             event_loop.exit();
@@ -1486,6 +1559,7 @@ fn run_inner(
         incoming: None,
         waker: Waker::winit(event_loop.create_proxy()),
         failure: None,
+        custom_cursors: std::collections::HashMap::new(),
         #[cfg(feature = "accessibility")]
         proxy: event_loop.create_proxy(),
     };
@@ -1521,6 +1595,7 @@ pub fn run_window_service(
         incoming: Some(Box::new(incoming)),
         waker: waker.clone(),
         failure: None,
+        custom_cursors: std::collections::HashMap::new(),
         #[cfg(feature = "accessibility")]
         proxy: event_loop.create_proxy(),
     };

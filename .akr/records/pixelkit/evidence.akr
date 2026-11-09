@@ -127,6 +127,45 @@ record pixelkit.evidence.gallery-renders-at-2x/1 : evidence {
         """
 }
 
+record pixelkit.evidence.grab-cursors-lege-gui-20261109/1 : evidence {
+    title "Lege's liminalUI GUI (uncommitted change on its working tree) built against this tree via command-line patches: 79 passed, 0 failed, 5 ignored, three runs. New test the_pointer_is_a_hand_over_a_tile_and_a_closed_hand_while_holding_it: arrow away from tiles, Grab over an output tile, Grabbing while pressed, Grab again on the release frame (a bug the test caught: the release frame had dropped to the arrow), arrow after the cursor leaves. One unrelated test, preview_drives_active_palette_light_and_dark, failed once in four runs (shared global palette)."
+    state verified
+    result pass
+    method command
+    observed_at git:fe53922fbfa75cbcc7e7ac5a3ca5d4fa8ddf1046
+    command "cargo test -p lege-gui-liminalui --config 'patch.\"https://github.com/liminalism/liminalkit\".liminalkit-<crate>.path=\"<local checkout>\"' (raster, shell, text, ui, windowing)"
+    summary """
+        Lege's liminalUI GUI (uncommitted change on its working tree) built against this tree via command-line patches: 79 passed, 0 failed, 5 ignored, three runs. New test the_pointer_is_a_hand_over_a_tile_and_a_closed_hand_while_holding_it: arrow away from tiles, Grab over an output tile, Grabbing while pressed, Grab again on the release frame (a bug the test caught: the release frame had dropped to the arrow), arrow after the cursor leaves. One unrelated test, preview_drives_active_palette_light_and_dark, failed once in four runs (shared global palette).
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.grab-cursors-review-render-20261109/1 : evidence {
+    title "Review render at 8x of the open and closed hands at 32 and 48 px over light (#f0f0f0) and dark (#303030) grounds: white hand, one-pixel dark outline (two at 48), finger gaps visible as dark lines on the open hand, curled fingers on the closed one; both read as hands on both grounds."
+    state verified
+    result pass
+    method manual
+    observed_at git:fe53922fbfa75cbcc7e7ac5a3ca5d4fa8ddf1046
+    command "LIMINALKIT_CURSOR_SNAPSHOT=dir cargo test -p liminalkit-windowing hand_cursor_review -- --ignored"
+    summary """
+        Review render at 8x of the open and closed hands at 32 and 48 px over light (#f0f0f0) and dark (#303030) grounds: white hand, one-pixel dark outline (two at 48), finger gaps visible as dark lines on the open hand, curled fingers on the closed one; both read as hands on both grounds.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.grab-cursors-suite-20261109/1 : evidence {
+    title "Windows 11, uncommitted tree on fe53922. Workspace suite 578 passed, 0 failed (575 before plus three cursor-image tests: white hand inside a dark outline with no white pixel touching clear ground and the hotspot on the hand; the open hand reaches higher than the closed; sizes 32/48/64 for scale 1/1.5/2, never below 16). Clippy: no findings."
+    state verified
+    result pass
+    method command
+    observed_at git:fe53922fbfa75cbcc7e7ac5a3ca5d4fa8ddf1046
+    command "cargo test --workspace && cargo clippy --workspace --all-targets"
+    summary """
+        Windows 11, uncommitted tree on fe53922. Workspace suite 578 passed, 0 failed (575 before plus three cursor-image tests: white hand inside a dark outline with no white pixel touching clear ground and the hotspot on the hand; the open hand reaches higher than the closed; sizes 32/48/64 for scale 1/1.5/2, never below 16). Clippy: no findings.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.interaction-lifecycle-clippy/1 : evidence {
     title "Workspace all-feature/all-target Clippy completed successfully; eight existing warnings remain in unchanged code. Strict -D warnings therefore does not pass."
     state verified

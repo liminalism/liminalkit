@@ -6,6 +6,7 @@
 //!   stays in `liminalkit-shell`, so UI/compositor users do not import winit.
 //! - [`panes`]: tiled in-app panes with draggable dividers.
 //! - [`windows`]: floating in-app windows that move, resize, raise and close.
+//! - [`cursors`]: pointer images the platform lacks (the grab hands on Windows).
 //!
 //! The in-app pieces are caller-owned state, like the rest of the toolkit's
 //! immediate-mode widgets: the application keeps a [`Panes`] or [`Windows`]
@@ -17,6 +18,7 @@
 //! windows are new. Provenance of the host: `pos-client-ui::shell`
 //! (restaurant-pos), see `ATTRIBUTION.md`.
 
+pub mod cursors;
 pub mod host;
 pub mod panes;
 pub mod present;

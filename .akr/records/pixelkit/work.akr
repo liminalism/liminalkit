@@ -117,6 +117,40 @@ record pixelkit.work.explicit-interaction-lifecycles/1 : work {
     }
 }
 
+record pixelkit.work.grab-cursors/1 : work {
+    title "Grab and Grabbing pointer shapes, drawn on Windows"
+    state completed
+    scope [ path "CHANGELOG.md", path "crates/liminalkit-windowing/**" ]
+    intent """
+        Add CursorShape::Grab and Grabbing (open and closed hand) so an application can say something can be picked up and dragged, first for Lege's draggable output file tiles. Windows has no hand cursor and winit maps Grab to IDC_SIZEALL (four-way move arrows), so the host draws the hands with the toolkit's coverage kernel (cursors::hand_cursor), sized to the display scale and redrawn when it changes; macOS and Linux keep their cursor theme's hands.
+        """
+    acceptance {
+        check consumer-builds {
+            statement """
+                Lege's GUI builds and its suite passes against the change, with a tile hover giving Grab and a held press Grabbing.
+                """
+            method command
+            verified_by [ @pixelkit.evidence.grab-cursors-lege-gui-20261109/1 ]
+        }
+        check hands-reviewed {
+            statement """
+                The rendered open and closed hands read as hands at 32 and 48 px on light and dark grounds.
+                """
+            method manual
+            verified_by [ @pixelkit.evidence.grab-cursors-review-render-20261109/1 ]
+        }
+        check suite-green {
+            statement """
+                The workspace suite and clippy pass with the new shapes and the cursor-image tests.
+                """
+            method command
+            command "cargo test --workspace && cargo clippy --workspace --all-targets"
+            verified_by [ @pixelkit.evidence.grab-cursors-suite-20261109/1 ]
+        }
+    }
+    author "dk"
+}
+
 record pixelkit.work.hardware-validation/1 : work {
     title "Validate KMS, touch gestures and scroll physics on real Raspberry Pi hardware"
     state proposed

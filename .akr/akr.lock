@@ -5,7 +5,7 @@ build {
     tool "akr 0.6.2"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:53b33ae8f3674a92b565ee57256d1a5f70bff975f47dee49c7305c1a003776ab"
+    source_graph "sha256:5248057951caf086c82f3d3d9fcf500ff51bf6e5bbd3f0196fd03fcaee4c61e2"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/pixelkit/decisions.akr" {
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:7fb937ae03212beeda44d7334ef4f1d917e1a0d3325cf6736b817923b1bb2d5a"
-    records 25
+    hash "sha256:a1cba28917565be192eefce8b2edd802a329670eb17d2ed1118fa50f888c98bd"
+    records 28
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
@@ -39,8 +39,8 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:4f9e2cb3a00367feba18054c312e00cfbb32245cab160af83130edb2cd25cf80"
-    records 15
+    hash "sha256:f708a54ceb41b82686d99661a6bb39a41d909f033a578e2a752093dccdd9f427"
+    records 16
 }
 
 resolution @pixelkit.decision.bidi-behind-feature/1 {
@@ -231,6 +231,21 @@ seal @pixelkit.evidence.gallery-renders-at-2x/1 {
     hash "sha256:683cbea3678258ea56bd3bf34a504d5f512ab2cc53fcd3d48e631bb225661da5"
 }
 
+seal @pixelkit.evidence.grab-cursors-lege-gui-20261109/1 {
+    state verified
+    hash "sha256:bef269638d106779256bcd30a0693974d4ba175aa01272180a4ad1ff4f8aa9f7"
+}
+
+seal @pixelkit.evidence.grab-cursors-review-render-20261109/1 {
+    state verified
+    hash "sha256:46ace2199ce86295fe678509c49d80dfb7b9bd16eff1024dc5991e483b4b3648"
+}
+
+seal @pixelkit.evidence.grab-cursors-suite-20261109/1 {
+    state verified
+    hash "sha256:6d6d5c59b2359cbe0b308c0d6df81a3ff0a50be9c99f3e89c007fd86451273a8"
+}
+
 seal @pixelkit.evidence.interaction-lifecycle-clippy/1 {
     state verified
     hash "sha256:3c60c37ee65bb6a35bcb6d7c737e3fb5a03c169a4a2ad4045f2bdd4224b33952"
@@ -399,6 +414,11 @@ seal @pixelkit.work.adoptability-pass/1 {
 seal @pixelkit.work.explicit-interaction-lifecycles/1 {
     state completed
     hash "sha256:61ca9ce1cc76a1817ed296ade25b2fc1c14a65e630781e653771282fb35cd924"
+}
+
+seal @pixelkit.work.grab-cursors/1 {
+    state completed
+    hash "sha256:7ac0b6ab510c68c712d8c10d01e0abd71436b188d90cb7c8a4a384b658c4c887"
 }
 
 seal @pixelkit.work.smooth-rounded-surfaces/1 {
