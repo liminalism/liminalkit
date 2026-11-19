@@ -5,10 +5,10 @@
 //! ```
 
 use liminalkit::raster::{Painter, RasterKernel, Rect, WindowBuffer};
-use liminalkit::shell::{Input, KeyInput, MouseButton, Scale};
+use liminalkit::shell::{Input, KeyInput, MouseButton, Scale, WheelSample};
 use liminalkit::text::{Align, TextCache, TextStyle};
 use liminalkit::ui::{ButtonStyle, ScrollState, Theme, Ui};
-use liminalkit::windowing::{run_app, PixelApp, WindowConfig};
+use liminalkit::windowing::{run_app, FrameInfo, PixelApp, WindowConfig};
 use liminalkit_test_fonts::{set, LATIN};
 
 struct Demo {
@@ -21,11 +21,13 @@ struct Demo {
     scroll: ScrollState,
     quit: bool,
     frames: u64,
+    interval: std::time::Duration,
 }
 
 impl PixelApp for Demo {
     fn render(&mut self, buffer: &mut WindowBuffer, s: Scale) {
         self.frames += 1;
+        self.input.set_scale(s);
         let mut ui = Ui::new(
             Painter::new(buffer),
             &mut self.text,
@@ -150,8 +152,17 @@ impl PixelApp for Demo {
     fn on_mouse(&mut self, button: MouseButton, pressed: bool) {
         self.input.mouse(button, pressed);
     }
-    fn on_scroll(&mut self, dx: f32, dy: f32) {
-        self.input.scrolled(dx, dy);
+    fn on_wheel(&mut self, sample: &WheelSample) {
+        self.input.wheel(*sample);
+    }
+    // The two hooks that let a scroll ease in: the frame's time goes to the
+    // controls, and a control still moving gets another frame.
+    fn on_frame(&mut self, frame: &FrameInfo) {
+        self.interval = frame.interval;
+        self.input.begin_frame(frame.now);
+    }
+    fn animation_interval(&self) -> Option<std::time::Duration> {
+        self.input.frame_requested().then_some(self.interval)
     }
     fn should_exit(&self) -> bool {
         self.quit
@@ -169,6 +180,7 @@ fn main() {
         scroll: ScrollState::new(),
         quit: false,
         frames: 0,
+        interval: std::time::Duration::from_millis(16),
     };
     run_app(
         demo,

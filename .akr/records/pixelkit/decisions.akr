@@ -88,6 +88,26 @@ record pixelkit.decision.facade-crate-and-app-adapter/1 : decision {
     }
 }
 
+record pixelkit.decision.no-directmanipulation-yet/1 : decision {
+    title "Do not build DirectManipulation touchpad input yet; classify Windows touchpad input from the wheel stream"
+    state proposed
+    scope [ path "crates/liminalkit-native/**", path "crates/liminalkit-shell/src/scroll/**" ]
+    decision """
+        liminalkit reads a Windows precision touchpad from the ordinary wheel stream, classed by value, applied without acceleration and without an added fling. DirectManipulation is not built. It is reconsidered only if a named need appears that the wheel stream cannot meet: pinch zoom distinct from Ctrl+wheel, a reliable end-of-gesture signal (for overscroll or snapping on lift), or sideways panning found to be missing.
+        """
+    context """
+        DirectManipulation is what Chromium, Firefox and Zed use and gives true pixel deltas, gesture phases and system inertia, but it needs COM, substantial unsafe code in liminalkit-native, probably the windows crate, and a per-frame update loop; once it takes a contact the wheel messages stop. The owner's recordings show the cheaper path is enough for scrolling: touchpad input never lands on a whole notch, so it separates from both wheels with no device identification, and its stream appears to carry the system's own inertia already. The intermediate option, a source hint from GetCurrentInputMessageSource, reported nothing without touchpad registration, which changes pointer delivery and was rejected.
+        """
+    consequences """
+        No gesture phases on Windows, so no overscroll and no snap-on-lift there; pinch arrives as Ctrl+wheel and is handed back as Interpreted::Zoom. Horizontal touchpad panning is unverified because no recording contains any. The classifier's one-fraction rule is load-bearing and must not be loosened without new recordings.
+        """
+    supported_by [
+        @pixelkit.observation.windows-touchpad-source-not-reported,
+        @pixelkit.observation.windows-wheel-and-touchpad-streams
+    ]
+    author "dk"
+}
+
 record pixelkit.decision.popups-claim-input-first/1 : decision {
     title "Anything that floats claims its input before the background draws and is drawn last"
     state proposed
@@ -109,6 +129,38 @@ record pixelkit.decision.popups-claim-input-first/1 : decision {
         A popup that is drawn without a prior handle_input still works but is not modal for that frame: draw claims what is left. Overlay content registers its controls with the overlay's Focus explicitly (the _focused control variants); the background Focus may also see them register, harmlessly, because the keys it would act on were taken.
         """
     implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}
+
+record pixelkit.decision.scroll-apps-own-navigation/1 : decision {
+    title "The scroll module interprets input and shapes motion; applications keep ownership of navigation"
+    state proposed
+    scope [ path "crates/liminalkit-shell/src/scroll/**" ]
+    decision """
+        Scrolling is three separable pieces: a WheelInterpreter (timestamped raw samples to f64 displacement, with class and OS-momentum flag), an optional single-axis unit-agnostic MotionController, and ScrollState plus scrollbar and routing in liminalkit-ui. The shell core is f64 and makes no pixel or integer assumption; rounding to device pixels happens at presentation. An application may adopt the interpreter alone.
+        """
+    context """
+        The first design was one ScrollEngine owning classification, acceleration, animation, bounds, drag, scrollbar and programmatic navigation with i64 offsets. Reading LiminalDoc showed the PDF reader is a plain winit application with its own f64 ScrollModel (drag, fling, autoscroll, reading anchors, tile planning) and the book editor holds position as fractional pages with its own snap and caret rules, using no liminalkit-ui widgets. A toolkit-owned engine would have been a second motion system competing with each. Rejected: a global smoother in the host, which cannot know a region's bounds.
+        """
+    consequences """
+        Two public layers to keep coherent instead of one. The reader and editor need a few lines to build samples and convert displacement to their own units. The toolkit must never take over page semantics, selection, anchors or render priority.
+        """
+    author "dk"
+}
+
+record pixelkit.decision.scroll-distance-at-event-time/1 : decision {
+    title "Wheel distance is settled when the event arrives; frame time only decides when it is shown"
+    state proposed
+    scope [ path "crates/liminalkit-shell/src/scroll/**" ]
+    decision """
+        Each wheel input adds its shaped distance to a target at the event's own timestamp. Motion only moves a displayed position towards that target. Acceleration changes how far the target moves; smoothing changes how the position reaches it. Displacement refused at a bound is discarded, never queued.
+        """
+    context """
+        The owner wanted acceleration and smoothing tunable independently and deterministic replay of captured traces. Rejected: a velocity-kick model where each notch adds velocity and friction decays it, because distance then depends on friction and duration, so the two cannot be tuned apart and conservation becomes a numerical-integration question.
+        """
+    consequences """
+        Frame-independence is exact only for the closed-form exponential; speed caps, bounds, interruptions and retargeting are covered by replay tests at several frame partitions rather than assumed. A 240-unit event is twice the displacement but one cadence observation.
+        """
     author "dk"
 }
 

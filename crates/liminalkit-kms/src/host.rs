@@ -103,6 +103,10 @@ pub fn run<A: PixelApp>(mut app: A, config: KmsConfig) -> Result<(), KmsError> {
 
             if pacer.should_render() {
                 let started = Instant::now();
+                app.on_frame(&liminalkit_windowing::FrameInfo {
+                    now: started,
+                    interval: pacer.frame(),
+                });
                 app.render(&mut buffer, scale);
                 // The buffer is the panel's shape and the copy relies on it; an
                 // application that resized it gets it back rather than taking

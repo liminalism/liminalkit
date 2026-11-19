@@ -229,6 +229,84 @@ record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
         """
 }
 
+record pixelkit.evidence.scroll-stage1-suite/1 : evidence {
+    title "Lossless wheel input (scroll stage 1): suite and clippy pass on the uncommitted tree; no device has been tried"
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo clippy --workspace --all-features --all-targets -- -D warnings && cargo test --workspace --all-features"
+    summary """
+        Windows 11, uncommitted tree on b60e4ce. Clippy reported nothing; every test binary passed (shell 49, windowing 79 with 1 ignored, ui 199, facade 4, raster 151, text 98). New tests cover: exact recovery of 120ths from winit's f32 line delta, lines staying lines off Windows, a notch following display scale and the lines-per-notch setting, per-sample delivery with timing through Input, ten 0.3 px moves making 3 px and 4000 moves of 0.125 px making exactly 500, refused movement not saved up at a bound, 64-bit scrollbar thumb at i32::MAX content, a focused text area staying where the wheel put it and following the caret on typing, an outside insert or taking focus, eight eighth-notches equalling one notch, and App delivering quarter notches at scale 1 and 2. The LiminalDoc writer and reader both pass cargo check against this tree. NOT done: no wheel or touchpad was used; scroll_capture compiles and has not been run interactively; no traces recorded yet.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.scroll-stage2-suite/1 : evidence {
+    title "Frame clock and frame requests (scroll stage 2): suite and clippy pass on the uncommitted tree; pacing not observed in a window"
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo clippy --workspace --all-features --all-targets -- -D warnings && cargo test --workspace --all-features"
+    summary """
+        Windows 11, uncommitted tree on b60e4ce. Clippy reported nothing; every test binary passed (shell 54, windowing 81 with 1 ignored, ui 199, facade 6). New tests cover: a frame request lasting exactly one frame, the frame time being whatever the host passed and absent until it does, App giving a Screen the time and returning one display frame as animation_interval only while it keeps asking, frame_interval clamped between 1/240 s and 1/30 s with 1/60 s default, after_busy true only within 1 ms of a tick or frame that took 4 ms or more, wheel-to-present recorded apart from other input, and WheelTrace::frames losing and repeating no sample at five frame intervals. scroll_capture ran for 6 seconds without crashing. LiminalDoc writer and reader pass cargo check. NOT done: no animation exists yet to pace, so the refresh-interval scheduling and the wheel-to-present figure have not been observed in a running window; the KMS on_frame call is compiled only.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.scroll-stage3-4-suite/1 : evidence {
+    title "Wheel interpreter and motion controller (scroll stages 3 and 4): suite and clippy pass, replays agree across frame rates; feel not yet judged on a screen"
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo clippy --workspace --all-features --all-targets -- -D warnings && cargo test --workspace --all-features"
+    summary """
+        Windows 11, uncommitted tree on b60e4ce. Clippy reported nothing; every test binary passed (shell 87, windowing 81 with 1 ignored, ui 199, facade 6). Against the three recorded traces: both wheels classed Notched on every sample and the touchpad Fine on every sample with gain 1; with the precision profile each recording's total displacement equals the plain conversion bit for bit; under the natural profile the coarse wheel's largest gain stayed below 1.2 and the finely graded wheel reached the full 2.0; first notches, reversals and notches after a 350 ms pause moved exactly one step. Replaying each recording through interpreter and controller at 16.667, 6.944, 33.333 and 11.111 ms a frame gave positions within 1e-6 px of a replay at eight times the rate at every shared instant, and equal final positions. scroll_tuning and scroll_capture each ran 6 s without crashing. LiminalDoc writer and reader pass cargo check. NOT done: nobody has scrolled in scroll_tuning, so the presets, smoothing times and lead are unjudged; horizontal input, Shift, Ctrl and Alt behaviour are covered by synthetic tests only.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.scroll-stage6-suite/1 : evidence {
+    title "Scroll regions, interactive scrollbar and pointer capture (scroll stage 6): suite and clippy pass; not yet used by hand in a window"
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo clippy --workspace --all-features --all-targets -- -D warnings && cargo test --workspace --all-features"
+    summary """
+        Windows 11, uncommitted tree on b60e4ce. Clippy reported nothing; every test binary passed (shell 96, windowing 81 with 1 ignored, ui 214, facade 6). The 199 UI tests that predate this stage passed without edits after ScrollState was rebuilt on the interpreter and motion controller. New headless tests with synthetic time cover: a notch easing in over frames and landing on exactly 60 px while asking for frames only until it rests; immediate arrival with no clock; a press halting at the drawn offset; forty 3/120 deltas making one notch; thumb drag one to one, continuing off the bar and outside the window; a held track press paging repeatedly and stopping on release; middle-button pan with the Grabbing cursor requested; middle-click autoscroll with a dead zone, ended by a press; MiddleButton::Off leaving the press unclaimed; a list inside a page keeping a roll that runs out and passing a new roll to the page; Chain handing unused distance to the outer region next frame; sideways movement only when content is wider; scroll_area viewport and gutters; drags surviving cursor_left and ended by blur. The window example started and ran 6 s. LiminalDoc writer and reader scroll tests still pass. NOT done: nobody has dragged a scrollbar or scrolled a table in a running window, so smoothing feel, thumb hit area and repeat timing are unjudged.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.scroll-stage7-suite/1 : evidence {
+    title "Fling, hand-tool pan, native wheel settings and touchpad hint (scroll stage 7), and the sticky grab cursor fix: suite and clippy pass; the hint is unobserved on a device"
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo clippy --workspace --all-features --all-targets -- -D warnings && cargo test --workspace --all-features"
+    summary """
+        Windows 11, uncommitted tree on b60e4ce. Clippy reported nothing; every test binary passed (shell 99, native 20, windowing 81 with 1 ignored, ui 217, facade 7). New tests cover: App showing the Grabbing cursor only while a middle-button pan is under way and the default afterwards (the owner-reported bug); a fling covering velocity/friction exactly, never moving backwards, identical however often advanced, stopping dead at an end and caught by a wheel notch; content let go at 625 px/s coasting to its known rest; no fling when the hand stopped before letting go; a hand-tool region panning with the left button and taking its presses; the lines-per-notch value's Off and Page meanings; SystemParametersInfo answering on this machine with a plausible value; a sample taking the hint of its own wheel message and no other. scroll_capture built with the native feature ran 6 s. LiminalDoc writer and reader pass cargo check. NOT done: whether Windows ever reports IMDT_TOUCHPAD for this touchpad's wheel messages has not been observed; fling and hand-tool pan have not been tried by hand; overscroll was not implemented.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.scroll-stage8-suite/1 : evidence {
+    title "Scroll stage 8: suite and clippy pass; preset report and per-sample cost measured; presets not judged by hand"
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo clippy --workspace --all-features --all-targets -- -D warnings && cargo test --workspace --all-features"
+    summary """
+        Windows 11, uncommitted tree on b60e4ce. Clippy reported nothing; every test binary passed (shell 100 with 2 ignored reports, native 20, windowing 81 with 1 ignored, ui 217, facade 7). A fourth recording (touchpad then wheel, through the native host) is classed without error: 89 continuous, 61 notched. Preset report, distance in notches travelled by each recording: coarse wheel 50.0 precision, 50.1 natural, 53.1 accelerated, 72.1 rapid; finely graded wheel 54.0, 80.6, 142.7, 310.0 with peak gains 2.0, 3.5 and 8.0 reached on 34 to 45 of 54 notches; touchpad 8.2 under every preset. Release build: interpret plus wheel plus advance costs about 50 ns a sample. rustdoc with warnings denied passes for liminalkit-shell, -ui, -windowing and -native; it fails for the liminalkit facade on two doc links in native.rs that predate this work. NOT done: no preset was changed, because no one has judged them by hand; frame cost of an animating table was not measured in a window; horizontal input and modifiers remain unrecorded.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.smooth-rounded-surfaces-suite/1 : evidence {
     title "Windows 11, uncommitted tree on bc2eff3. Full suite 575 passed, 0 failed; no clippy findings in the changed code. New tests: the_smooth_rounded_surface_matches_the_stepped_one_except_at_its_corners (mid-edge pixels identical, corners gain shades) and smooth_edges_are_off_by_default_and_change_only_the_corners (switch off equals default byte for byte; switch on changes only pixels within a corner radius). In Lege's GUI at 1x and 1.5x, button and field corners render smooth where they were stepped."
     state verified

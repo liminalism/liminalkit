@@ -471,57 +471,32 @@ impl<'a> Ui<'a> {
 
 // --- scrolling --------------------------------------------------------------
 
-/// How far a region has been scrolled, and how far it may be.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct ScrollState {
-    /// Pixels hidden above the top of the viewport. Never negative.
+pub use crate::scroll::ScrollState;
+use crate::scroll::{Axis, ScrollThumb};
+
+/// A scrollbar thumb's length and position along a track, in device pixels.
+///
+/// `None` when everything fits and there is nothing to show. The arithmetic
+/// is 64-bit: a long table's content height times its viewport does not fit
+/// in an `i32`, and a thumb computed from the overflow sits in the wrong
+/// place or off the track altogether.
+pub fn scrollbar_thumb(
+    track: i32,
+    viewport: i32,
+    content: i32,
     offset: i32,
-}
-
-impl ScrollState {
-    pub fn new() -> ScrollState {
-        ScrollState::default()
+    min_thumb: i32,
+) -> Option<(i32, i32)> {
+    let max = ScrollState::max_offset(viewport, content);
+    if max == 0 || track <= 0 {
+        return None;
     }
-
-    pub fn offset(&self) -> i32 {
-        self.offset
-    }
-
-    /// The furthest this can scroll given a viewport and its content.
-    ///
-    /// Zero when everything fits, so a short list cannot be scrolled at all —
-    /// content that drifts off the top and cannot be brought back is the most
-    /// common bug in a hand-written scroll region.
-    pub fn max_offset(viewport: i32, content: i32) -> i32 {
-        (content - viewport).max(0)
-    }
-
-    /// Move by a delta and clamp. Returns the offset actually applied.
-    pub fn scroll_by(&mut self, delta: i32, viewport: i32, content: i32) -> i32 {
-        let before = self.offset;
-        self.offset = (self.offset + delta).clamp(0, ScrollState::max_offset(viewport, content));
-        self.offset - before
-    }
-
-    /// Bring a band of content into view, moving as little as possible.
-    pub fn reveal(&mut self, top: i32, height: i32, viewport: i32, content: i32) {
-        let max = ScrollState::max_offset(viewport, content);
-        if top < self.offset {
-            self.offset = top;
-        } else if top + height > self.offset + viewport {
-            self.offset = top + height - viewport;
-        }
-        self.offset = self.offset.clamp(0, max);
-    }
-
-    /// Clamp after the content changed underneath — a filter applied, a day
-    /// with fewer rows. Without this a list scrolled to the bottom shows
-    /// nothing at all when it gets shorter.
-    pub fn clamp_to(&mut self, viewport: i32, content: i32) {
-        self.offset = self
-            .offset
-            .clamp(0, ScrollState::max_offset(viewport, content));
-    }
+    let length = (i64::from(track) * i64::from(viewport) / i64::from(content.max(1)))
+        .max(i64::from(min_thumb))
+        .min(i64::from(track));
+    let travel = i64::from(track) - length;
+    let start = travel * i64::from(offset.clamp(0, max)) / i64::from(max);
+    Some((start as i32, length as i32))
 }
 
 // --- tables -----------------------------------------------------------------
@@ -777,6 +752,10 @@ pub const COLUMN_GAP: i32 = 8;
 /// digit off a price.
 pub const TABLE_GUTTER: i32 = 10;
 
+/// The shortest a scrollbar thumb is drawn, in logical pixels: long content
+/// would otherwise shrink it to a sliver nobody can see, let alone grab.
+pub const MIN_THUMB: i32 = 20;
+
 /// What a table did this frame.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TableOutcome {
@@ -855,23 +834,41 @@ impl<'a> Ui<'a> {
         self.painter
             .horizontal_rule(area.x, header.bottom() - 1, area.w, theme.panel_edge);
 
-        let content = row_count as i32 * row_height;
-        // Before anything is drawn: the list may have shrunk since last frame,
-        // and a table scrolled past its own end shows nothing at all.
-        state.scroll.clamp_to(body.h, content);
+        // Saturating: a table too long for a pixel offset to address stops
+        // at the end of what one can, rather than wrapping to a negative
+        // height and showing nothing.
+        let content = i64::from(row_height)
+            .saturating_mul(row_count as i64)
+            .min(i64::from(i32::MAX)) as i32;
         state.prune_keyed(row_count, &key_at);
 
-        let (_, scrolled) = self.input.take_scroll(body);
-        if scrolled != 0.0 {
-            // Negative wheel delta means the content moves up.
-            state
-                .scroll
-                .scroll_by(-scrolled.round() as i32, body.h, content);
-        }
-
-        let offset = state.scroll.offset();
+        // The scrollbar first, so that a press on it is its own and not a
+        // click on the row underneath. Its whole gutter can be grabbed; the
+        // bar drawn in it is narrower.
+        let bar = Rect::new(body.right() - gutter, body.y, gutter, body.h);
+        let thumb = state.scroll.scrollbar(
+            self.input,
+            bar,
+            Axis::Vertical,
+            body.h,
+            content,
+            self.px(MIN_THUMB),
+        );
+        // A wheel line is a row, so a notch moves whole rows. This also
+        // clamps: the list may have shrunk since last frame, and a table
+        // scrolled past its own end shows nothing at all.
+        let line = f64::from(row_height);
+        let view = state.scroll.update(
+            self.input,
+            body,
+            (body.w, body.h),
+            (body.w, content),
+            (line, line),
+        );
+        let offset = view.offset.1;
         let first = (offset / row_height).max(0) as usize;
-        let last = (((offset + body.h) / row_height) as usize + 1).min(row_count);
+        let last = ((i64::from(offset) + i64::from(body.h)) / i64::from(row_height) + 1)
+            .min(row_count as i64) as usize;
 
         let mut outcome = TableOutcome {
             activated: None,
@@ -883,7 +880,7 @@ impl<'a> Ui<'a> {
         // Indexed rather than iterated: the row closure is called by index,
         // and the range is the visible window rather than the whole slice.
         for index in first..last {
-            let top = body.y + index as i32 * row_height - offset;
+            let top = body.y + (index as i64 * i64::from(row_height) - i64::from(offset)) as i32;
             let line = Rect::new(body.x, top, body.w, row_height);
             if !self.painter.is_visible(line) {
                 continue;
@@ -935,24 +932,30 @@ impl<'a> Ui<'a> {
         self.painter.pop_clip();
 
         // A scrollbar, only when there is somewhere to scroll to.
-        let max = ScrollState::max_offset(body.h, content);
-        if max > 0 {
-            let track = Rect::new(
-                body.right() - gutter + self.px(3),
-                body.y,
-                self.px(4).max(1),
-                body.h,
-            );
-            self.painter.fill_rect(track, theme.hover);
-            let thumb_height = (body.h * body.h / content).max(20);
-            let travel = body.h - thumb_height;
-            let thumb_top = body.y + (travel * offset / max);
-            self.painter.fill_rect(
-                Rect::new(track.x, thumb_top, track.w, thumb_height),
-                theme.text_dim,
+        if let Some(thumb) = thumb {
+            let inset = self.px(3);
+            let width = self.px(4).max(1);
+            self.painter
+                .fill_rect(Rect::new(bar.x + inset, bar.y, width, bar.h), theme.hover);
+            self.scroll_thumb(
+                thumb,
+                Rect::new(bar.x + inset, thumb.rect.y, width, thumb.rect.h),
             );
         }
         outcome
+    }
+}
+
+impl Ui<'_> {
+    /// Paint a scrollbar thumb at `rect`: darker while the pointer is on it
+    /// or has hold of it, so it reads as something that can be dragged.
+    pub fn scroll_thumb(&mut self, thumb: ScrollThumb, rect: Rect) {
+        let colour = if thumb.held || thumb.hovered {
+            self.theme.text
+        } else {
+            self.theme.text_dim
+        };
+        self.painter.fill_rect(rect, colour);
     }
 }
 
@@ -981,6 +984,102 @@ mod tests {
 
     fn keys(count: usize) -> Vec<String> {
         (0..count).map(|index| format!("row-{index}")).collect()
+    }
+
+    #[test]
+    fn movement_smaller_than_a_pixel_adds_up_instead_of_vanishing() {
+        // A touchpad on a slow scroll reports a fraction of a pixel a frame.
+        // Rounded each time, ten of them are nothing; carried, they are three
+        // pixels.
+        let mut scroll = ScrollState::new();
+        let mut moved = 0;
+        for _ in 0..10 {
+            moved += scroll
+                .scroll_by_precise(0.0, 0.3, (100, 100), (100, 1_000))
+                .1;
+        }
+        assert_eq!(scroll.offset(), 3);
+        assert_eq!(moved, 3, "the reported steps add up to the offset");
+
+        // And back again, to exactly where it started.
+        for _ in 0..10 {
+            scroll.scroll_by_precise(0.0, -0.3, (100, 100), (100, 1_000));
+        }
+        assert_eq!(scroll.offset(), 0);
+    }
+
+    #[test]
+    fn thousands_of_fractional_moves_do_not_drift() {
+        let mut scroll = ScrollState::new();
+        for _ in 0..4_000 {
+            scroll.scroll_by_precise(0.0, 0.125, (100, 100), (100, 100_000));
+        }
+        assert_eq!(scroll.offset(), 500);
+    }
+
+    #[test]
+    fn whole_pixel_movement_is_exact() {
+        let mut scroll = ScrollState::new();
+        assert_eq!(
+            scroll.scroll_by_precise(0.0, 95.0, (100, 100), (100, 600)),
+            (0, 95)
+        );
+        assert_eq!(scroll.offset(), 95);
+    }
+
+    #[test]
+    fn the_two_axes_move_independently() {
+        let mut scroll = ScrollState::new();
+        scroll.scroll_by_precise(12.5, 40.25, (100, 100), (300, 600));
+        scroll.scroll_by_precise(0.5, 0.25, (100, 100), (300, 600));
+        assert_eq!((scroll.offset_x(), scroll.offset()), (13, 41));
+        // Content no wider than the viewport cannot move sideways at all.
+        let mut narrow = ScrollState::new();
+        narrow.scroll_by_precise(50.0, 10.0, (100, 100), (100, 600));
+        assert_eq!((narrow.offset_x(), narrow.offset()), (0, 10));
+    }
+
+    #[test]
+    fn movement_refused_at_an_end_is_dropped_not_saved_up() {
+        // Scroll far past the bottom, then back by one pixel. If the excess
+        // had been kept, the view would not move until it was used up.
+        let mut scroll = ScrollState::new();
+        scroll.scroll_by_precise(0.0, 5_000.0, (100, 100), (100, 600));
+        assert_eq!(scroll.offset(), 500);
+        scroll.scroll_by_precise(0.0, -1.0, (100, 100), (100, 600));
+        assert_eq!(scroll.offset(), 499);
+
+        let mut top = ScrollState::new();
+        top.scroll_by_precise(0.0, -5_000.0, (100, 100), (100, 600));
+        top.scroll_by_precise(0.0, 1.0, (100, 100), (100, 600));
+        assert_eq!(top.offset(), 1);
+    }
+
+    #[test]
+    fn a_delta_that_is_not_a_number_moves_nothing() {
+        let mut scroll = ScrollState::new();
+        scroll.scroll_by_precise(0.0, 10.0, (100, 100), (100, 600));
+        scroll.scroll_by_precise(f64::NAN, f64::INFINITY, (100, 100), (100, 600));
+        assert_eq!((scroll.offset_x(), scroll.offset()), (0, 10));
+    }
+
+    #[test]
+    fn a_thumb_is_placed_exactly_at_both_ends_and_never_overflows() {
+        assert_eq!(scrollbar_thumb(200, 200, 150, 0, 20), None, "it all fits");
+        // Half the content visible: half the track, at the top then the bottom.
+        assert_eq!(scrollbar_thumb(200, 200, 400, 0, 20), Some((0, 100)));
+        assert_eq!(scrollbar_thumb(200, 200, 400, 200, 20), Some((100, 100)));
+        // Very long content: the thumb keeps its minimum length and the
+        // multiplication that used to overflow an i32 does not.
+        let content = i32::MAX;
+        let max = ScrollState::max_offset(1_000, content);
+        assert_eq!(scrollbar_thumb(1_000, 1_000, content, 0, 20), Some((0, 20)));
+        assert_eq!(
+            scrollbar_thumb(1_000, 1_000, content, max, 20),
+            Some((980, 20))
+        );
+        let (middle, _) = scrollbar_thumb(1_000, 1_000, content, max / 2, 20).unwrap();
+        assert!((489..=491).contains(&middle), "halfway down: {middle}");
     }
 
     // --- scrolling ------------------------------------------------------

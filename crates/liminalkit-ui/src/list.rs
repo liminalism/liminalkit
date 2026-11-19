@@ -5,8 +5,9 @@
 //! viewport are drawn. Wheel input over the area scrolls it; a thin scrollbar
 //! shows where you are.
 
+use crate::scroll::Axis;
 pub use crate::widget::ScrollState;
-use crate::widget::Ui;
+use crate::widget::{Ui, MIN_THUMB};
 use liminalkit_raster::Rect;
 
 /// Result of laying out a scroll list this frame.
@@ -34,7 +35,10 @@ impl Ui<'_> {
         heights: &[i32],
         mut draw: impl FnMut(&mut Ui<'_>, usize, Rect),
     ) -> ScrollList {
-        let content: i32 = heights.iter().sum();
+        let content = heights
+            .iter()
+            .fold(0_i64, |sum, &height| sum + i64::from(height))
+            .min(i64::from(i32::MAX)) as i32;
         let gutter = self.px(GUTTER);
         let needs_bar = content > area.h;
         let viewport = if needs_bar {
@@ -43,12 +47,30 @@ impl Ui<'_> {
             area
         };
 
-        let (_, dy) = self.input.take_scroll(area);
-        if dy != 0.0 {
-            state.scroll_by(-dy.round() as i32, viewport.h, content);
-        }
-        state.clamp_to(viewport.h, content);
-        let offset = state.offset();
+        // The scrollbar first, so a press on it is not a click on a row.
+        let track = Rect::new(viewport.right(), area.y, gutter, area.h);
+        let thumb = state.scrollbar(
+            self.input,
+            track,
+            Axis::Vertical,
+            viewport.h,
+            content,
+            self.px(MIN_THUMB),
+        );
+        // Rows here have no one height, so a wheel line is the system's
+        // default distance at this display scale.
+        let line = self
+            .input
+            .scroll_settings()
+            .default_line_px(f64::from(self.scale.0));
+        let view = state.update(
+            self.input,
+            area,
+            (viewport.w, viewport.h),
+            (viewport.w, content),
+            (line, line),
+        );
+        let offset = view.offset.1;
 
         self.painter.push_clip(viewport);
         let mut y = viewport.y - offset;
@@ -69,25 +91,20 @@ impl Ui<'_> {
         }
         self.painter.pop_clip();
 
-        if needs_bar {
-            let track = Rect::new(viewport.right(), area.y, gutter, area.h);
-            let thumb_h = ((area.h as i64 * area.h as i64) / content.max(1) as i64)
-                .max(self.px(18) as i64) as i32;
-            let max = ScrollState::max_offset(viewport.h, content);
-            let travel = (area.h - thumb_h).max(0);
-            let thumb_y = if max > 0 {
-                area.y + (travel as i64 * offset as i64 / max as i64) as i32
-            } else {
-                area.y
-            };
+        if let Some(thumb) = thumb {
             let inset = self.px(2);
             let bar = Rect::new(
                 track.x + inset,
-                thumb_y,
+                thumb.rect.y,
                 (gutter - inset * 2).max(1),
-                thumb_h.min(area.h),
+                thumb.rect.h,
             );
-            self.painter.fill_rect(bar, self.theme.panel_edge);
+            let colour = if thumb.held || thumb.hovered {
+                self.theme.text_dim
+            } else {
+                self.theme.panel_edge
+            };
+            self.painter.fill_rect(bar, colour);
         }
 
         ScrollList {

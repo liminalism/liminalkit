@@ -15,6 +15,8 @@ pub struct FrameTimer {
     present: Vec<Duration>,
     /// Input event → present, for frames that had an input timestamp.
     input_to_present: Vec<Duration>,
+    /// Wheel or touchpad movement → present, for frames that had one.
+    wheel_to_present: Vec<Duration>,
     window_start: Instant,
     /// Print interval.
     every: Duration,
@@ -42,6 +44,7 @@ impl FrameTimer {
             paint: Vec::new(),
             present: Vec::new(),
             input_to_present: Vec::new(),
+            wheel_to_present: Vec::new(),
             window_start: Instant::now(),
             every: Duration::from_secs(2),
             budget,
@@ -78,6 +81,13 @@ impl FrameTimer {
         }
     }
 
+    /// The time from a wheel or touchpad movement to the present that showed
+    /// it. Kept apart from the general input figure because scrolling is
+    /// where latency is felt as lag rather than read as a number.
+    pub fn record_wheel(&mut self, wheel_to_present: Duration) {
+        push_cap(&mut self.wheel_to_present, wheel_to_present);
+    }
+
     /// Percentiles for the samples currently held. Does not reset them.
     pub fn snapshot(&self) -> FrameSnapshot {
         FrameSnapshot {
@@ -85,6 +95,7 @@ impl FrameTimer {
             paint: summarize(&self.paint),
             present: summarize(&self.present),
             input_to_present: summarize(&self.input_to_present),
+            wheel_to_present: summarize(&self.wheel_to_present),
         }
     }
 
@@ -117,11 +128,15 @@ impl FrameTimer {
             let n = total.iter().filter(|d| **d > b).count();
             format!(" over-budget {n}/{frames}")
         });
-        let input_line = if input.is_empty() {
+        let mut input_line = if input.is_empty() {
             "input→present (none)".to_string()
         } else {
             line("input→present", &mut input)
         };
+        if !self.wheel_to_present.is_empty() {
+            input_line.push_str(" | ");
+            input_line.push_str(&line("wheel→present", &mut self.wheel_to_present));
+        }
         eprintln!(
             "[frames] {frames} in {secs:.1}s ({:.1}/s) | {} | {} | {} | {} | {}{}",
             frames as f64 / secs,
@@ -136,6 +151,7 @@ impl FrameTimer {
         self.paint.clear();
         self.present.clear();
         self.input_to_present.clear();
+        self.wheel_to_present.clear();
         self.window_start = Instant::now();
     }
 }
@@ -158,13 +174,15 @@ pub struct PhaseStats {
     pub max: Duration,
 }
 
-/// The four phases a frame can report.
+/// The phases a frame can report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameSnapshot {
     pub tick: Option<PhaseStats>,
     pub paint: Option<PhaseStats>,
     pub present: Option<PhaseStats>,
     pub input_to_present: Option<PhaseStats>,
+    /// Wheel or touchpad movement to the present that showed it.
+    pub wheel_to_present: Option<PhaseStats>,
 }
 
 fn summarize(samples: &[Duration]) -> Option<PhaseStats> {
@@ -185,6 +203,20 @@ fn summarize(samples: &[Duration]) -> Option<PhaseStats> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wheel_latency_is_reported_apart_from_other_input() {
+        let mut timer = FrameTimer::new(false, None);
+        assert_eq!(timer.snapshot().wheel_to_present, None);
+        for ms in [5_u64, 7, 9] {
+            timer.record_wheel(Duration::from_millis(ms));
+        }
+        let wheel = timer.snapshot().wheel_to_present.expect("recorded");
+        assert_eq!(wheel.count, 3);
+        assert_eq!(wheel.p50, Duration::from_millis(7));
+        assert_eq!(wheel.max, Duration::from_millis(9));
+        assert_eq!(timer.snapshot().input_to_present, None, "kept apart");
+    }
 
     #[test]
     fn input_to_present_is_queryable_without_the_log_env() {

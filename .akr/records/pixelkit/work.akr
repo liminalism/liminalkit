@@ -255,6 +255,73 @@ record pixelkit.work.raster-simd-coverage/1 : work {
         """
 }
 
+record pixelkit.work.scroll-module/1 : work {
+    title "Shared scrolling: lossless wheel input, a wheel interpreter, an optional motion controller, and scroll regions"
+    state proposed
+    scope [
+        path "crates/liminalkit-shell/src/input.rs",
+        path "crates/liminalkit-shell/src/scroll/**",
+        path "crates/liminalkit-ui/src/**",
+        path "crates/liminalkit-windowing/src/host.rs",
+        path "crates/liminalkit/src/app.rs"
+    ]
+    intent """
+        Scrolling by notched wheel, free-spin wheel, precision touchpad and dragging should feel good in the LiminalDoc PDF reader and book editor, with no input level ignored. As found, wheel input was lost between the OS and the widget (fixed 24 physical px per line, no timestamps, per-frame summing, per-frame integer rounding, horizontal discarded, the text area pulling the view back to the caret), and neither application had cadence-based acceleration or wheel smoothing. Delivered in eight stages, each shippable: lossless input and hardware trace capture; clock and replay; wheel interpreter; minimal motion controller and tuning example; LiminalDoc integration; scroll regions, routing and interactive scrollbar; drag physics and native hints; calibration.
+        """
+    note """
+        Owner approved the staged plan on 2026-11-19 after an outside review that asked for the interpreter/motion split, earlier trace capture and LiminalDoc integration as an acceptance stage. Constants are starting points until calibrated on a notched wheel, a free-spin wheel and a precision touchpad; no touchscreen is available.
+        """
+    trace [
+        "Owner asked for a scrolling module with no input level ignored; scouting found five places wheel input was lost between winit and the widget, so stage 1 fixes loss before adding any feel.",
+        "winit on Windows hands over the raw wheel value divided by 120, so exact 120ths are recovered there only; other platforms' line deltas stay lines, as the outside review asked.",
+        "ScrollEvent, on_scroll and on_scroll_event were kept rather than removed: the LiminalDoc writer reads them by path dependency and would not build until its own migration in stage 5.",
+        "ScrollState keeps integer offsets plus a carried fraction per axis, because text and images draw at whole device pixels and hit-testing must match what was drawn.",
+        "Movement refused at a bound is dropped, not carried: otherwise scrolling back from an end would first have to use up the excess.",
+        "The text area re-revealed its caret every focused frame, undoing wheel scrolls; it now follows only when caret, text length or focus changed, which also covers IME commits made outside the widget.",
+        "A wheel line is the content's own line (table row, text line) times the system lines-per-notch; content without lines uses 100/3 logical px so a notch is 100 logical px at any scale.",
+        "Horizontal offsets exist in ScrollState but table, list and text area still have no content wider than their viewport; sideways scrolling of those waits for scroll regions in stage 6.",
+        "Trace capture moved into stage 1 on the review's advice: the classifier in stage 3 is to be written against what the three devices actually send, not against assumptions.",
+        "Stage 2: nothing in the toolkit reads the clock while drawing; the host passes frame time in so recorded input replays identically in tests.",
+        "Frame requests last one frame and must be renewed, so a window returns to sleeping the moment nothing is moving.",
+        "Animation pacing uses the display's refresh interval, not ControlFlow::Poll: softbuffer has no vsync, so Poll would spin a core repainting.",
+        "GetMessageTime was rejected as the sample timestamp: tick resolution of 10 to 16 ms cannot resolve a free-spin wheel; delivery time plus an after_busy flag is used.",
+        "Stage 3's classifier waits on traces from the owner's three devices; scroll_capture exists for that and has only been smoke-started, not used with a device.",
+        "Stage 3: the owner's recordings showed both wheels send only whole notches, so the classifier reads whole against fractional and leaves the two wheels to cadence.",
+        "A fraction is conclusive and flips the class at once; a whole notch is weak evidence, so three in a row are needed to leave Fine.",
+        "A lone first notch is treated as a notch immediately but reported unsettled: an Unknown class would have made a wheel's first click behave unlike its second.",
+        "Continuous input is never accelerated because the touchpad recording shows the system already coasting after a stroke; adding gain or a fling would double it.",
+        "Units carry a line, a page and a pixel in the caller's own unit, since the LiminalDoc editor scrolls in fractional pages, not pixels.",
+        "Stage 4: the motion controller is one axis with direct, chase, timed animation and interruption only; flings and springs wait until the basic feel is judged on a screen.",
+        "Replay tests compare positions at identical instants across four frame rates on all three recordings; an earlier nearest-instant comparison failed on the test's own slack, not the controller.",
+        "Stage 5: both LiminalDoc apps adopted the interpreter alone; neither took the motion controller, since each already owns a position model with its own rules.",
+        "ScrollEvent, on_scroll and on_scroll_event were still not removed: LiminalDoc no longer uses them, but restaurant-pos, salon-desktop and the LegeOS shell could not be checked from here.",
+        "The reader needed liminalkit-shell only for scroll types, confirming the module is usable without the host, Input or any widget.",
+        "Stage 6: winit keeps delivering moves and the release while a button is held, so cursor_left no longer ends a drag; blur and cancel_pointer remain the ways out.",
+        "Nested routing uses last frame's region list because an outer region draws, and would claim the wheel, before the list inside it exists this frame.",
+        "Who a roll belongs to is latched for 400 ms: the recordings show gaps up to 136 ms inside a roll, and a page must not lurch when a list runs out.",
+        "Tuning lives inside ScrollState because table, scroll_list and text_area have fixed signatures; a separate options argument would have changed every caller.",
+        "With no frame clock the state settles at once, which kept all 199 existing UI tests passing unchanged and leaves low-level hosts as they were.",
+        "Left-button drag-pan was left out: controls act on press, so it needs the arm-then-threshold handoff and belongs with fling in stage 7.",
+        "Not done in stage 6: sideways scrolling of the table, a scrollbar on the text area, overlay or auto-hiding bars, and edge auto-scroll while selecting.",
+        "Owner reported the grab hand staying after a middle click: App seeded each frame's screen cursor with last frame's control request, so nothing restored the arrow.",
+        "Stage 7: fling is off by default because with a mouse a drag that ends is over; the PDF reader makes the same choice for non-touch input.",
+        "Overscroll was not added to the new controller: Windows wheel and touchpad streams carry no phase to spring back on, and no touchscreen is available to judge it.",
+        "The fling was written as its own closed form instead of extracting ScrollAxis's physics, which would have meant refactoring tested touch code for three lines of maths.",
+        "Wheel settings and the source hint use two hand-declared user32 functions in win.rs, the crate's one unsafe module, so no dependency was added.",
+        "The touchpad hint only ever adds SourceHint::Touchpad when the system volunteers it; registering the thread as touchpad-aware changes pointer delivery and was deliberately not done.",
+        "Stage 8: the native recording marked none of 89 touchpad messages, so the source hint stays experimental and nothing depends on it.",
+        "Presets were left as written: the report shows the finely graded wheel reaching full gain under every accelerating preset, which only the owner's hand can call right or too much.",
+        "Interpreting and moving one sample costs about 50 ns in a release build, so the scroll path is not a performance concern.",
+        "The old ScrollEvent, on_scroll and on_scroll_event hooks remain for the owner to remove once other applications are checked.",
+        "cargo doc with warnings denied still fails in the facade crate on doc links in native.rs, which belongs to the uncommitted native-controls work and was left alone."
+    ]
+    implements [
+        @pixelkit.decision.scroll-apps-own-navigation,
+        @pixelkit.decision.scroll-distance-at-event-time
+    ]
+    author "dk"
+}
+
 record pixelkit.work.smooth-rounded-surfaces/1 : work {
     title "Opt-in anti-aliased rounded surfaces for widgets (Ui::set_smooth_edges)"
     state completed

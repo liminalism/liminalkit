@@ -7,6 +7,7 @@
 //! `liminalkit-windowing`.
 
 pub mod clipboard;
+pub mod cursor;
 pub mod frame_log;
 /// Experimental, behavior and hardware untested.
 pub mod gesture;
@@ -14,6 +15,7 @@ pub mod input;
 pub mod platform;
 pub mod present;
 pub mod scale;
+pub mod scroll;
 /// Experimental, behavior and hardware untested.
 pub mod scroll_physics;
 pub mod touch;
@@ -21,11 +23,13 @@ pub mod touch;
 pub mod touch_replay;
 
 pub use clipboard::Clipboard;
+pub use cursor::CursorShape;
 pub use frame_log::{FrameSnapshot, FrameTimer, PhaseStats};
-pub use input::{Input, KeyInput, Modifiers, MouseButton};
+pub use input::{CanScroll, Input, KeyInput, Modifiers, MouseButton, ScrollBoundary};
 pub use platform::{beep, system_accent};
 pub use present::{PresentError, Presenter, PresenterBackend};
 pub use scale::Scale;
+pub use scroll::{GesturePhase, ScrollSettings, WheelSample};
 
 pub use touch::{
     TouchDelta, TouchEvent, TouchId, TouchPhase, TouchPointer, TouchState, TouchTransform,

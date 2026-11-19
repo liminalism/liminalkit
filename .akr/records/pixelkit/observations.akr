@@ -1,0 +1,36 @@
+akr 0.1
+project pixelkit
+
+record pixelkit.observation.windows-touchpad-source-not-reported/1 : observation {
+    title "Windows reported no touchpad source for a precision touchpad's wheel messages without touchpad registration"
+    state verified
+    scope [
+        path "crates/liminalkit-native/src/win.rs",
+        path "crates/liminalkit-shell/tests/scroll_traces/**"
+    ]
+    statement """
+        Recorded with scroll_capture behind the liminalkit-native host on the owner's Windows 11 machine: 150 wheel samples in one sitting, 89 from the precision touchpad (120ths between 3 and 145, never a multiple of 120) and 61 whole notches from a mouse wheel. The subclass on the winit window called GetCurrentInputMessageSource for each wheel message and none of the 150 samples was marked as touchpad. The same run did read the system wheel settings (3 lines, 3 characters), so the subclass was attached. This matches Microsoft's documentation that IMDT_TOUCHPAD is reported only once the thread has registered as touchpad-aware. One thing was not separated: the recording cannot tell whether the call answered 'mouse' or never matched its message, though the matching is unit-tested. Either way the hint as built gives nothing on this machine. The value-based classifier needed no hint: it classed all 89 as continuous and all 61 as notches. No recording yet contains horizontal movement or a held modifier.
+        """
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    method instrumented
+    watches [ "crates/liminalkit-native/src/win.rs" ]
+    confidence medium
+    author "dk"
+}
+
+record pixelkit.observation.windows-wheel-and-touchpad-streams/1 : observation {
+    title "What a coarse wheel, a finely graded wheel and a precision touchpad send through winit on Windows"
+    state verified
+    scope [
+        path "crates/liminalkit-shell/src/scroll/**",
+        path "crates/liminalkit-shell/tests/scroll_traces/**"
+    ]
+    statement """
+        Recorded on the owner's Windows 11 machine with scroll_capture (winit 0.30.13, host delivery timestamps, scale 1), one recording per device of 50 to 108 samples. Both mouse wheels sent only whole notches (every delta exactly +120 or -120): the coarse wheel 70 to 1800 ms apart, the finely graded one 18 to 136 ms apart with gaps stepping in roughly 8 ms units. Nothing in the values distinguishes the two wheels; only cadence does, so the expected 'fractional notches from a fine wheel' did not occur and a class for them cannot be detected from this hardware. The precision touchpad sent 120ths between 3 and 66, never a multiple of 120, every 17 to 21 ms. After each stroke its values fell to an alternating 4 and 5 with gaps widening to 30, 43 and 134 ms before stopping, which is consistent with the system synthesising inertia in the legacy wheel stream; it is not proof, because lift-off was not marked in the recording. No recording contains horizontal movement or a held modifier, so the sign of sideways deltas and Shift/Ctrl behaviour are still unobserved.
+        """
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    method instrumented
+    watches [ "crates/liminalkit-shell/tests/scroll_traces/**" ]
+    confidence medium
+    author "dk"
+}

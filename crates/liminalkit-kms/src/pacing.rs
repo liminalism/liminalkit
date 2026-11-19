@@ -37,6 +37,11 @@ impl<T> Pacer<T> {
             policy: FramePolicy::OnDemand,
         }
     }
+    /// One frame of the display.
+    pub fn frame(&self) -> Duration {
+        self.frame
+    }
+
     pub fn invalidate(&mut self) {
         self.dirty = true;
     }

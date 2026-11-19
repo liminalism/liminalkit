@@ -29,6 +29,8 @@ use std::time::{Duration, Instant};
 
 use crate::present::SoftbufferPresenter;
 use liminalkit_raster::WindowBuffer;
+pub use liminalkit_shell::scroll::{GesturePhase, ScrollSettings, WheelSample};
+pub use liminalkit_shell::CursorShape;
 use liminalkit_shell::{
     FrameTimer, KeyInput, Modifiers, MouseButton, PresentError, Presenter, Scale, TouchEvent,
     TouchId, TouchState,
@@ -140,10 +142,6 @@ impl Waker {
     }
 }
 
-/// A wheel notch, in pixels. Platforms that report scrolling in lines rather
-/// than pixels get multiplied by this to land somewhere comfortable.
-const PIXELS_PER_LINE: f32 = 24.0;
-
 /// One key transition, including release, the whole committed string, and the
 /// physical key. [`PixelApp::on_key`] still receives presses only, as the
 /// first character, so existing callers keep working.
@@ -160,17 +158,12 @@ pub struct KeyEvent {
     pub modifiers: Modifiers,
 }
 
-/// Touch or gesture phase. Momentum is [`GesturePhase::Moved`] after
-/// [`GesturePhase::Ended`] is not invented here; the platform's phase is forwarded as-is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GesturePhase {
-    Started,
-    Moved,
-    Ended,
-    Cancelled,
-}
-
-/// A scroll. Line deltas stay distinct from the pixel deltas derived from them.
+/// A scroll, reduced to pixels with the line deltas alongside.
+///
+/// Superseded by [`WheelSample`], which keeps the platform's own unit, a
+/// timestamp and the modifiers, and is what [`PixelApp::on_wheel`] receives.
+/// This stays, with [`PixelApp::on_scroll_event`], until the applications
+/// that read it have moved.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScrollEvent {
     pub pixel_dx: f32,
@@ -190,10 +183,57 @@ pub struct ImeCursorArea {
     pub height: f64,
 }
 
+/// What the host knows about the frame it is about to ask for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrameInfo {
+    /// When the frame is being drawn. Anything that moves over time is drawn
+    /// where it should be at this instant.
+    pub now: Instant,
+    /// How long the display takes to show one frame: the interval worth
+    /// asking for while something is animating. A sixtieth of a second when
+    /// the display does not say.
+    pub interval: Duration,
+}
+
+/// A display's frame interval from its refresh rate in millihertz.
+///
+/// Kept between a thirtieth and a two-hundred-and-fortieth of a second: a
+/// display that reports nonsense must not turn an animation into a slide show
+/// or into a spin.
+pub fn frame_interval(refresh_millihertz: Option<u32>) -> Duration {
+    const DEFAULT: Duration = Duration::from_nanos(16_666_667);
+    match refresh_millihertz {
+        Some(millihertz) if millihertz > 0 => {
+            Duration::from_secs_f64(1_000.0 / f64::from(millihertz))
+                .clamp(Duration::from_secs(1) / 240, Duration::from_secs(1) / 30)
+        }
+        _ => DEFAULT,
+    }
+}
+
+/// Whether an event that arrived at `now` probably waited in the queue.
+///
+/// `busy` is when the host last finished a tick or a frame and how long that
+/// took. Events that pile up behind a slow frame are all delivered the moment
+/// it ends, a fraction of a millisecond apart, whatever the spacing they were
+/// made with. Their delivery times say nothing about how fast the wheel was
+/// turning, and anything measuring that has to be told.
+pub fn after_busy(now: Instant, busy: Option<(Instant, Duration)>) -> bool {
+    const LONG: Duration = Duration::from_millis(4);
+    const SOON: Duration = Duration::from_millis(1);
+    busy.is_some_and(|(ended, took)| took >= LONG && now.saturating_duration_since(ended) <= SOON)
+}
+
 pub trait PixelApp {
     /// Paint the whole frame. `buffer` is the window's physical size;
     /// `scale` converts the logical units layout is written in.
     fn render(&mut self, buffer: &mut WindowBuffer, scale: Scale);
+
+    /// A frame is about to be drawn: called immediately before
+    /// [`PixelApp::render`], with the time to draw it for. An application
+    /// that animates takes its clock from here rather than from the system,
+    /// so that what it draws depends only on what it was told.
+    fn on_frame(&mut self, _frame: &FrameInfo) {}
 
     /// The window moved to a display with a different scale factor. The
     /// next `render` receives it too; this is for caches keyed on scale.
@@ -307,12 +347,31 @@ pub trait PixelApp {
     /// offered — drops either land or they do not.
     fn on_file_drop(&mut self, _path: PathBuf) {}
 
-    /// Wheel or trackpad movement, in pixels. Positive `y` scrolls content
-    /// down — the direction the wheel turns, not the direction the view moves.
+    /// One wheel or touchpad movement, exactly as the platform reported it:
+    /// its own unit, its phase, the modifiers held, and when it arrived.
+    /// Positive `y` is the wheel turning away from the user.
+    ///
+    /// This is the hook to implement. The two below are the same event
+    /// reduced to pixels, and all three are called for every movement, so an
+    /// application that feeds more than one of them into its scrolling moves
+    /// twice.
+    fn on_wheel(&mut self, _sample: &WheelSample) {}
+
+    /// The system's wheel settings, when something has read them: how many
+    /// lines a notch scrolls, or a page, or nothing. The plain host does not
+    /// read them and never calls this, so three lines a notch is assumed;
+    /// `liminalkit-native` reads them on Windows and calls this at start-up
+    /// and whenever the user changes them.
+    fn on_scroll_settings(&mut self, _settings: &ScrollSettings) {}
+
+    /// Wheel or trackpad movement, in physical pixels. Positive `y` scrolls
+    /// content down — the direction the wheel turns, not the direction the
+    /// view moves. A line is worth the system default at the window's scale.
+    /// Prefer [`PixelApp::on_wheel`].
     fn on_scroll(&mut self, _dx: f32, _dy: f32) {}
 
     /// Scroll with its phase and, when the platform sent lines, those lines
-    /// kept separate from the pixel conversion.
+    /// kept separate from the pixel conversion. Prefer [`PixelApp::on_wheel`].
     fn on_scroll_event(&mut self, _event: &ScrollEvent) {}
 
     /// Pinch / magnify. `delta` is the platform's magnification step.
@@ -467,6 +526,13 @@ struct Slot {
     /// When the next unprompted repaint is due, for an app that asked for an
     /// interval. `None` until the first one is scheduled.
     next_tick: Option<Instant>,
+    /// First wheel movement since the last present.
+    wheel_at: Option<Instant>,
+    /// When the last tick or frame ended and how long it took, for telling
+    /// which events waited behind it.
+    busy: Option<(Instant, Duration)>,
+    /// One frame of this window's display.
+    frame_interval: Duration,
     /// The pointer shape last set on the window.
     cursor_shape: CursorShape,
     /// The edge length a drawn cursor (the hands) was last made at, so a
@@ -543,6 +609,9 @@ impl Slot {
             modifiers: Modifiers::default(),
             native_focused: true,
             next_tick: None,
+            wheel_at: None,
+            busy: None,
+            frame_interval: frame_interval(None),
             cursor_shape: CursorShape::Default,
             cursor_size: 0,
         }
@@ -557,7 +626,21 @@ impl Slot {
     fn run_tick(&mut self) {
         let started = Instant::now();
         self.app.tick();
-        self.pending_tick = started.elapsed();
+        let ended = Instant::now();
+        self.pending_tick = ended - started;
+        self.busy = Some((ended, self.pending_tick));
+    }
+
+    /// Read the display's refresh rate again: at creation, and when the
+    /// window may have moved to another display.
+    fn update_frame_interval(&mut self) {
+        if let Some(window) = self.native.window() {
+            self.frame_interval = frame_interval(
+                window
+                    .current_monitor()
+                    .and_then(|monitor| monitor.refresh_rate_millihertz()),
+            );
+        }
     }
 
     fn note_input(&mut self) {
@@ -643,6 +726,10 @@ impl Slot {
             return;
         }
         let started = Instant::now();
+        self.app.on_frame(&FrameInfo {
+            now: started,
+            interval: self.frame_interval,
+        });
         self.app.render(&mut self.buffer, self.scale);
         let painted = Instant::now();
         if self.app.ime_allowed() {
@@ -655,6 +742,11 @@ impl Slot {
             return;
         }
         let presented = Instant::now();
+        self.busy = Some((presented, presented - started));
+        if let Some(at) = self.wheel_at.take() {
+            self.timer
+                .record_wheel(presented.saturating_duration_since(at));
+        }
         let input_to_present = self
             .input_at
             .take()
@@ -828,6 +920,7 @@ impl Shell {
             tree_published: false,
             window,
         });
+        slot.update_frame_interval();
     }
 }
 
@@ -1022,24 +1115,50 @@ pub fn gesture_phase(phase: TouchPhase) -> GesturePhase {
     }
 }
 
-/// Pixel deltas for existing callers, plus the original line deltas when the
-/// platform reported lines.
-pub fn scroll_event(delta: MouseScrollDelta, phase: TouchPhase) -> ScrollEvent {
+/// How long after the process first asked `now` is: the clock wheel samples
+/// are stamped with. See [`liminalkit_shell::scroll::host_time`].
+pub fn host_time(now: Instant) -> Duration {
+    liminalkit_shell::scroll::host_time(now)
+}
+
+/// A winit wheel event as a [`WheelSample`], with nothing converted.
+///
+/// On Windows winit hands over the wheel message's raw value divided by 120,
+/// so the original 120ths are recovered and a fine wheel's quarter notch
+/// stays a quarter notch. Elsewhere a line stays a line.
+pub fn wheel_sample(
+    delta: MouseScrollDelta,
+    phase: TouchPhase,
+    at: Duration,
+    modifiers: Modifiers,
+) -> WheelSample {
+    let phase = gesture_phase(phase);
     match delta {
-        MouseScrollDelta::LineDelta(x, y) => ScrollEvent {
-            pixel_dx: x * PIXELS_PER_LINE,
-            pixel_dy: y * PIXELS_PER_LINE,
-            line_dx: Some(x),
-            line_dy: Some(y),
-            phase: gesture_phase(phase),
-        },
-        MouseScrollDelta::PixelDelta(position) => ScrollEvent {
-            pixel_dx: position.x as f32,
-            pixel_dy: position.y as f32,
-            line_dx: None,
-            line_dy: None,
-            phase: gesture_phase(phase),
-        },
+        MouseScrollDelta::LineDelta(x, y) => {
+            WheelSample::from_lines(x, y, cfg!(target_os = "windows"), phase, at)
+        }
+        MouseScrollDelta::PixelDelta(position) => {
+            WheelSample::from_pixels(position.x, position.y, phase, at)
+        }
+    }
+    .with_modifiers(modifiers)
+}
+
+/// The pixel reduction of a sample, for [`PixelApp::on_scroll`] and
+/// [`PixelApp::on_scroll_event`]. A line is worth the default at `scale`, so
+/// a notch covers the same distance on screen at any display scale.
+pub fn scroll_event(sample: &WheelSample, scale: Scale) -> ScrollEvent {
+    let settings = ScrollSettings::default();
+    let line = settings.default_line_px(f64::from(scale.0));
+    // No page to speak of here; the default setting never asks for one.
+    let (dx, dy) = sample.pixels(&settings, (line, line), (0.0, 0.0));
+    let lines = sample.notches();
+    ScrollEvent {
+        pixel_dx: dx as f32,
+        pixel_dy: dy as f32,
+        line_dx: lines.map(|(x, _)| x as f32),
+        line_dy: lines.map(|(_, y)| y as f32),
+        phase: sample.phase,
     }
 }
 
@@ -1138,40 +1257,6 @@ fn platform_cursor(
         }
     }
     icon.into()
-}
-
-/// Pointer shapes an application can ask for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CursorShape {
-    /// The platform arrow.
-    #[default]
-    Default,
-    /// An I-beam over editable text.
-    Text,
-    /// A hand over something clickable.
-    Pointer,
-    /// A left-right arrow over a draggable vertical edge.
-    ResizeHorizontal,
-    /// An up-down arrow over a draggable horizontal edge.
-    ResizeVertical,
-    /// A top-left to bottom-right arrow over a `\` corner handle.
-    ResizeDiagonalTlBr,
-    /// A top-right to bottom-left arrow over a `/` corner handle.
-    ResizeDiagonalTrBl,
-    /// An open hand over something that can be picked up and dragged: a file
-    /// tile, a card, a canvas to pan. Drawn by the toolkit on Windows, which
-    /// has no hand of its own; the cursor theme's elsewhere.
-    Grab,
-    /// A closed hand while it is being dragged.
-    Grabbing,
-}
-
-impl CursorShape {
-    /// Whether the toolkit draws this shape itself on this platform rather
-    /// than asking for a system cursor.
-    pub fn is_drawn(self) -> bool {
-        cfg!(target_os = "windows") && matches!(self, CursorShape::Grab | CursorShape::Grabbing)
-    }
 }
 
 /// Whether an interval-driven repaint is due, and when the next one is.
@@ -1328,8 +1413,10 @@ impl ApplicationHandler<Host> for Shell {
                 slot.app.on_layout_changed();
                 slot.request_redraw();
             }
+            WindowEvent::Moved(_) => slot.update_frame_interval(),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 slot.cancel_touches();
+                slot.update_frame_interval();
                 slot.scale = Scale::new(scale_factor);
                 slot.app.on_layout_changed();
                 slot.app.on_scale(slot.scale);
@@ -1394,7 +1481,12 @@ impl ApplicationHandler<Host> for Shell {
             WindowEvent::Touch(touch) => slot.note_touch(touch),
             WindowEvent::DroppedFile(path) => slot.note_dropped_file(path),
             WindowEvent::MouseWheel { delta, phase, .. } => {
-                let scrolled = scroll_event(delta, phase);
+                let now = Instant::now();
+                let mut sample = wheel_sample(delta, phase, host_time(now), slot.modifiers);
+                sample.after_busy = after_busy(now, slot.busy);
+                slot.wheel_at.get_or_insert(now);
+                slot.app.on_wheel(&sample);
+                let scrolled = scroll_event(&sample, slot.scale);
                 slot.app.on_scroll(scrolled.pixel_dx, scrolled.pixel_dy);
                 slot.app.on_scroll_event(&scrolled);
                 slot.note_input();
@@ -1867,6 +1959,12 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::default(),
         });
+        app.on_wheel(&WheelSample::from_pixels(
+            0.0,
+            1.0,
+            GesturePhase::Moved,
+            Duration::ZERO,
+        ));
         app.on_scroll_event(&ScrollEvent {
             pixel_dx: 0.0,
             pixel_dy: 1.0,
@@ -2009,16 +2107,121 @@ mod tests {
     }
 
     #[test]
+    fn a_wheel_event_arrives_whole_with_its_unit_time_and_modifiers() {
+        use liminalkit_shell::scroll::WheelUnit;
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        };
+        let at = Duration::from_millis(7);
+        // A fine wheel: a quarter notch across, three quarters down.
+        let sample = wheel_sample(
+            MouseScrollDelta::LineDelta(0.25, -0.75),
+            TouchPhase::Moved,
+            at,
+            shift,
+        );
+        if cfg!(target_os = "windows") {
+            assert_eq!(sample.unit, WheelUnit::Windows120);
+            assert_eq!((sample.x, sample.y), (30.0, -90.0));
+        } else {
+            assert_eq!(sample.unit, WheelUnit::Lines);
+            assert_eq!((sample.x, sample.y), (0.25, -0.75));
+        }
+        assert_eq!(sample.at, at);
+        assert_eq!(sample.modifiers, shift);
+        assert_eq!(sample.notches(), Some((0.25, -0.75)));
+
+        let touch = wheel_sample(
+            MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(0.25, -0.5)),
+            TouchPhase::Started,
+            at,
+            Modifiers::default(),
+        );
+        assert_eq!(touch.unit, WheelUnit::Pixels);
+        assert_eq!((touch.x, touch.y), (0.25, -0.5));
+        assert_eq!(touch.phase, GesturePhase::Started);
+    }
+
+    #[test]
+    fn a_frame_interval_follows_the_display_within_sane_limits() {
+        let sixtieth = Duration::from_nanos(16_666_667);
+        assert_eq!(frame_interval(None), sixtieth);
+        assert_eq!(frame_interval(Some(0)), sixtieth);
+        let at_144 = frame_interval(Some(144_000));
+        assert!((at_144.as_secs_f64() - 1.0 / 144.0).abs() < 1e-9);
+        // A display claiming 1 Hz or 10 kHz is not believed.
+        assert_eq!(frame_interval(Some(1_000)), Duration::from_secs(1) / 30);
+        assert_eq!(
+            frame_interval(Some(10_000_000)),
+            Duration::from_secs(1) / 240
+        );
+    }
+
+    #[test]
+    fn events_delivered_straight_after_a_slow_frame_are_marked_as_having_waited() {
+        let ended = Instant::now();
+        let slow = Some((ended, Duration::from_millis(12)));
+        let quick = Some((ended, Duration::from_millis(1)));
+        let soon = ended + Duration::from_micros(200);
+        let later = ended + Duration::from_millis(9);
+        assert!(
+            after_busy(soon, slow),
+            "it sat in the queue behind the frame"
+        );
+        assert!(!after_busy(later, slow), "the loop was idle when it came");
+        assert!(!after_busy(soon, quick), "a quick frame holds nothing up");
+        assert!(!after_busy(soon, None));
+    }
+
+    #[test]
+    fn host_time_starts_at_zero_and_never_runs_backwards() {
+        let first = Instant::now();
+        let start = host_time(first);
+        assert!(host_time(first + Duration::from_millis(5)) >= start + Duration::from_millis(5));
+        // An instant from before the epoch is clamped, not a panic.
+        let _ = host_time(first - Duration::from_millis(1));
+    }
+
+    #[test]
     fn scroll_keeps_line_deltas_and_forwards_the_phase() {
-        let lines = scroll_event(MouseScrollDelta::LineDelta(1.0, -2.0), TouchPhase::Ended);
+        let at = Duration::ZERO;
+        let none = Modifiers::default();
+        let lines = scroll_event(
+            &wheel_sample(
+                MouseScrollDelta::LineDelta(1.0, -2.0),
+                TouchPhase::Ended,
+                at,
+                none,
+            ),
+            Scale::ONE,
+        );
         assert_eq!(lines.line_dx, Some(1.0));
         assert_eq!(lines.line_dy, Some(-2.0));
-        assert_eq!(lines.pixel_dy, -2.0 * PIXELS_PER_LINE);
+        // Two notches of three lines, a hundred logical pixels a notch.
+        assert!((lines.pixel_dy + 200.0).abs() < 1e-3);
         assert_eq!(lines.phase, GesturePhase::Ended);
+        // The same turn of the wheel covers the same distance on a display
+        // at twice the scale, which a fixed pixel count per line did not.
+        let doubled = scroll_event(
+            &wheel_sample(
+                MouseScrollDelta::LineDelta(0.0, -2.0),
+                TouchPhase::Moved,
+                at,
+                none,
+            ),
+            Scale(2.0),
+        );
+        assert!((doubled.pixel_dy + 400.0).abs() < 1e-3);
 
         let pixels = scroll_event(
-            MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(4.0, 5.0)),
-            TouchPhase::Moved,
+            &wheel_sample(
+                MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(4.0, 5.0)),
+                TouchPhase::Moved,
+                at,
+                none,
+            ),
+            Scale::ONE,
         );
         assert_eq!(pixels.line_dx, None);
         assert_eq!((pixels.pixel_dx, pixels.pixel_dy), (4.0, 5.0));

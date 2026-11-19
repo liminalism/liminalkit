@@ -1,0 +1,59 @@
+liminalkit-wheel-trace 1
+meta device=free-spin wheel
+meta platform=windows
+meta scale=1
+meta stamp=host delivery time
+@0 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@86696 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@222726 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@350655 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@438709 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@494775 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@558578 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@998561 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1054710 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1126583 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1182616 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1246563 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1318563 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1942700 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@1982725 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2014655 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2062767 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2102717 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2158660 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2202024 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2614670 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2638624 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2670631 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2694647 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2718633 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2750607 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2774623 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@2807047 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3230687 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3254646 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3286547 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3304821 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3323200 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3341280 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3359360 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3878655 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@3910666 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4310697 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4342714 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4366596 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4390622 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4422500 d 0 120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4846570 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4886587 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4918677 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4950710 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@4982730 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5006577 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5046652 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5422688 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5462718 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5494622 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5526631 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0
+@5550690 d 0 -120 phase=moved mom=? src=? mods=---- stamp=d busy=0

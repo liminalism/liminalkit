@@ -2,10 +2,10 @@ akr-lock 0.1
 project pixelkit
 
 build {
-    tool "akr 0.6.2"
+    tool "akr 0.7.0"
     grammar "0.1"
-    vocabulary "0.2"
-    source_graph "sha256:5248057951caf086c82f3d3d9fcf500ff51bf6e5bbd3f0196fd03fcaee4c61e2"
+    vocabulary "0.3"
+    source_graph "sha256:573e375cfb2b89135b5ffe788d4c5006b940c21a627f74d748e23b33da101d57"
 }
 
 source ".akr/project.akr" {
@@ -14,18 +14,23 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/decisions.akr" {
-    hash "sha256:af0deef8fc62f6b90a416fc56049c19d8b6e8d914cd102fd08ddac0572b93356"
-    records 6
+    hash "sha256:dd25cd3c807619d781500e5d160b4b0c820e15b3f4f95729b540d0b78916524d"
+    records 9
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:a1cba28917565be192eefce8b2edd802a329670eb17d2ed1118fa50f888c98bd"
-    records 28
+    hash "sha256:2218c63c3d29d97c0cdffbe3289b0344498b249bfabf214391281a822a6c757c"
+    records 34
+}
+
+source ".akr/records/pixelkit/observations.akr" {
+    hash "sha256:d92dafafc63c5f2523eef8f2a6133252f5faff6e1300f4340d74fb96f8624773"
+    records 2
 }
 
 source ".akr/records/pixelkit/papercuts.akr" {
-    hash "sha256:0fcd9826f795fb26f539c734444e1a7f4ca4d127f13797bf5d491e76770e719e"
-    records 16
+    hash "sha256:6a2537b9899f41507367b750caf2d8f5fef07d55bded074212f7ad021e5cc754"
+    records 17
 }
 
 source ".akr/records/pixelkit/policies.akr" {
@@ -39,8 +44,8 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:f708a54ceb41b82686d99661a6bb39a41d909f033a578e2a752093dccdd9f427"
-    records 16
+    hash "sha256:d6f523b41f7146d9bbfc80142021729fd8576bead1941db4f5b97ecab2b3d7b0"
+    records 17
 }
 
 resolution @pixelkit.decision.bidi-behind-feature/1 {
@@ -65,6 +70,18 @@ resolution @pixelkit.decision.facade-crate-and-app-adapter/1 {
     slot implements
     to @pixelkit.policy.explicit-state-toolkit/1
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.no-directmanipulation-yet/1 {
+    slot supported_by
+    to @pixelkit.observation.windows-touchpad-source-not-reported/1
+    hash "sha256:76708ddead53275cefba7f377488eb9f6754ac4e97ec783cce014b30068cc47e"
+}
+
+resolution @pixelkit.decision.no-directmanipulation-yet/1 {
+    slot supported_by
+    to @pixelkit.observation.windows-wheel-and-touchpad-streams/1
+    hash "sha256:cb1fd24314a50c3ed1391aff19c8d6e152935ddae3d918d6e4f013754eeaf7e1"
 }
 
 resolution @pixelkit.decision.popups-claim-input-first/1 {
@@ -155,6 +172,18 @@ resolution @pixelkit.work.publish-packaging/1 {
     slot after
     to @pixelkit.work.public-docs/1
     hash "sha256:24b7aa5ba05a6db16faad5243a1a827e87e6d1a637ce6b558dc8839704cfb25b"
+}
+
+resolution @pixelkit.work.scroll-module/1 {
+    slot implements
+    to @pixelkit.decision.scroll-apps-own-navigation/1
+    hash "sha256:5bc7b5c9ca143a019766ab916b50c65f5c945f823a8bb801980b6ab15880c9e5"
+}
+
+resolution @pixelkit.work.scroll-module/1 {
+    slot implements
+    to @pixelkit.decision.scroll-distance-at-event-time/1
+    hash "sha256:0de3790efefe5277e1bcb9e6c7a9bae730d409b421e9a72ce539d6b1aa0a1815"
 }
 
 resolution @pixelkit.work.text-shaping-fallback/1 {
@@ -271,6 +300,36 @@ seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
     hash "sha256:7be3c4e877ed80d33a38f802bcf894f66e84bdbe475234b7ba532f7a87109d7e"
 }
 
+seal @pixelkit.evidence.scroll-stage1-suite/1 {
+    state verified
+    hash "sha256:d8944063268fe9701e1abf846367e66fa452e3deb5c6ea0f96a3acab650be60a"
+}
+
+seal @pixelkit.evidence.scroll-stage2-suite/1 {
+    state verified
+    hash "sha256:3337e369d07e1f7f964eb08e6b68a23e86218c7577ec80674d0a19f7c7b11d8b"
+}
+
+seal @pixelkit.evidence.scroll-stage3-4-suite/1 {
+    state verified
+    hash "sha256:62017451ba50e230d4cd4adcfe397876ca78a92b9c5a028084d6b4689b79337e"
+}
+
+seal @pixelkit.evidence.scroll-stage6-suite/1 {
+    state verified
+    hash "sha256:c53650b70d014f31204ffaf22cb4c0d99d5fbd9bf9155adf51584984aebea9c3"
+}
+
+seal @pixelkit.evidence.scroll-stage7-suite/1 {
+    state verified
+    hash "sha256:7614d037650a75a47ceb0054dc46880b7dd1aae400ee5aab5ac86ddfbaf65d01"
+}
+
+seal @pixelkit.evidence.scroll-stage8-suite/1 {
+    state verified
+    hash "sha256:d2bd4005ddbb2963812539171804dd0f595ae7a6b53b60da88e76f59d24a591a"
+}
+
 seal @pixelkit.evidence.smooth-rounded-surfaces-suite/1 {
     state verified
     hash "sha256:2c5a56abd2dc43dd3e46225ca54cc3d4b255771a452f81fe008ef99b66e7d76a"
@@ -321,6 +380,16 @@ seal @pixelkit.evidence.workspace-lint-and-docs-clean/1 {
     hash "sha256:47d1305b38903083b0c6432c17d05320417d5991ffca8c845466b7b0d5606646"
 }
 
+seal @pixelkit.observation.windows-touchpad-source-not-reported/1 {
+    state verified
+    hash "sha256:76708ddead53275cefba7f377488eb9f6754ac4e97ec783cce014b30068cc47e"
+}
+
+seal @pixelkit.observation.windows-wheel-and-touchpad-streams/1 {
+    state verified
+    hash "sha256:cb1fd24314a50c3ed1391aff19c8d6e152935ddae3d918d6e4f013754eeaf7e1"
+}
+
 seal @pixelkit.papercut.a-standalone-audit-harness-importing-the-kms/1 {
     state verified
     hash "sha256:0f10db38f38ff756c852f18ff4d78ad4f35fd2382ee9ba03cb1032a5981cc229"
@@ -369,6 +438,11 @@ seal @pixelkit.papercut.on-windows-with-core-autocrlf-true-akr-akr-lock/1 {
 seal @pixelkit.papercut.recording-the-sibling-formatting-result-failed/1 {
     state verified
     hash "sha256:07444db44ebf88986848128bf9d7b1444b18b16b1b49d60cae6ef55c31f2b951"
+}
+
+seal @pixelkit.papercut.scripted-exact-match-edits-to-crates-rs-failed/1 {
+    state verified
+    hash "sha256:97bab289496d8a33346103dae8bc02694cf5ca7059653d651363a2130ffbf982"
 }
 
 seal @pixelkit.papercut.strict-workspace-clippy-fails-on-eight-existing/1 {

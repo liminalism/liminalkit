@@ -31,14 +31,17 @@
 //! the worked example of how.
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use liminalkit_raster::{Painter, RasterKernel, Rect, WindowBuffer};
-use liminalkit_shell::{Input, KeyInput, Modifiers, MouseButton, Scale, TouchEvent, TouchPointer};
+use liminalkit_shell::{
+    Input, KeyInput, Modifiers, MouseButton, Scale, TouchEvent, TouchPointer, WheelSample,
+};
 use liminalkit_text::{FontSet, TextCache};
 use liminalkit_ui::{Focus, Theme, Ui};
 use liminalkit_windowing::{
-    run_app, CursorShape, ImeCursorArea, ImeEvent, PixelApp, Waker, WindowConfig, WindowRequest,
+    run_app, CursorShape, FrameInfo, ImeCursorArea, ImeEvent, PixelApp, Waker, WindowConfig,
+    WindowRequest,
 };
 
 /// What a screen can ask of the host during one frame, and what the host
@@ -72,10 +75,24 @@ pub struct Context {
     /// the host after the frame. A new window needs its own application:
     /// `Box::new(App::new(other_screen, fonts))`.
     pub windows: Vec<WindowRequest>,
+    /// When this frame is being drawn. `None` when the host supplied no
+    /// clock; see [`Input::now`].
+    pub now: Option<Instant>,
+    /// One frame of the display the window is on.
+    pub frame_interval: Duration,
+    frame_wanted: bool,
     keys: Vec<KeyInput>,
 }
 
 impl Context {
+    /// Ask for another frame after this one, because the screen is drawing
+    /// something that is still moving. Lasts one frame: ask again in the
+    /// next for as long as it moves. A control that animates asks through
+    /// `ui.input` by itself; this is for the screen's own drawing.
+    pub fn request_frame(&mut self) {
+        self.frame_wanted = true;
+    }
+
     /// Whether `key` arrived this frame. A convenience over `ui.input.keys()`
     /// for a screen that wants a shortcut without consuming the key from the
     /// controls, which still see it.
@@ -170,10 +187,16 @@ pub struct App<S: Screen> {
     title: Option<String>,
     fullscreen: Option<bool>,
     cursor: CursorShape,
+    /// The shape the screen last chose, kept apart from what a control asked
+    /// for. The screen's choice carries over from frame to frame; a control's
+    /// request is for the frame it was made in and no longer.
+    screen_cursor: CursorShape,
     ime_caret: Option<Rect>,
     dark: Option<bool>,
     windows: std::collections::VecDeque<WindowRequest>,
     window_title: String,
+    /// One frame of the display, as the host last reported it.
+    frame_interval: Duration,
     #[cfg(feature = "accessibility")]
     semantics: liminalkit_ui::semantics::Semantics,
 }
@@ -194,10 +217,12 @@ impl<S: Screen> App<S> {
             title: None,
             fullscreen: None,
             cursor: CursorShape::Default,
+            screen_cursor: CursorShape::Default,
             ime_caret: None,
             dark: None,
             windows: std::collections::VecDeque::new(),
             window_title: String::new(),
+            frame_interval: liminalkit_windowing::host::frame_interval(None),
             #[cfg(feature = "accessibility")]
             semantics: liminalkit_ui::semantics::Semantics::default(),
         }
@@ -261,13 +286,17 @@ impl<S: Screen> PixelApp for App<S> {
             exit: false,
             title: None,
             fullscreen: None,
-            cursor: self.cursor,
+            cursor: self.screen_cursor,
             ime_caret: None,
             reset_focus: false,
             dark: self.dark,
             windows: Vec::new(),
+            now: self.input.now(),
+            frame_interval: self.frame_interval,
+            frame_wanted: false,
             keys: Vec::new(),
         };
+        self.input.set_scale(scale);
         self.screen
             .before_frame(&mut self.input, Rect::new(0, 0, size.0, size.1), &ctx);
         ctx.keys = self.input.keys().to_vec();
@@ -295,6 +324,9 @@ impl<S: Screen> PixelApp for App<S> {
             #[cfg(not(feature = "accessibility"))]
             let mut ui = ui;
             self.screen.draw(&mut ui, &mut ctx);
+            if ctx.frame_wanted {
+                ui.input.request_frame();
+            }
             ui.input.end_frame();
         }
         self.exit |= ctx.exit;
@@ -303,7 +335,13 @@ impl<S: Screen> PixelApp for App<S> {
         }
         self.title = ctx.title.or(self.title.take());
         self.fullscreen = ctx.fullscreen.or(self.fullscreen.take());
-        self.cursor = ctx.cursor;
+        // A control that asked for a shape while drawing (a scrollbar thumb
+        // being dragged) is more specific than the screen's choice.
+        // The request is not what the next frame starts from: seeding the
+        // screen's choice with it left the closed hand showing after a
+        // middle-button pan had ended, with nothing to put the arrow back.
+        self.screen_cursor = ctx.cursor;
+        self.cursor = self.input.take_cursor_request().unwrap_or(ctx.cursor);
         self.ime_caret = ctx.ime_caret;
         self.windows.extend(ctx.windows);
         if ctx.reset_focus {
@@ -336,8 +374,19 @@ impl<S: Screen> PixelApp for App<S> {
         self.screen.attach(waker);
     }
 
+    fn on_frame(&mut self, frame: &FrameInfo) {
+        self.frame_interval = frame.interval;
+        self.input.begin_frame(frame.now);
+    }
+
     fn animation_interval(&self) -> Option<Duration> {
-        self.screen.animation_interval()
+        let screen = self.screen.animation_interval();
+        if !self.input.frame_requested() {
+            return screen;
+        }
+        // Something drawn last frame is still moving: one display frame from
+        // now, or sooner if the screen wanted sooner anyway.
+        Some(screen.map_or(self.frame_interval, |own| own.min(self.frame_interval)))
     }
 
     fn tick(&mut self) {
@@ -393,8 +442,12 @@ impl<S: Screen> PixelApp for App<S> {
         self.input.mouse(button, pressed);
     }
 
-    fn on_scroll(&mut self, dx: f32, dy: f32) {
-        self.input.scrolled(dx, dy);
+    fn on_wheel(&mut self, sample: &WheelSample) {
+        self.input.wheel(*sample);
+    }
+
+    fn on_scroll_settings(&mut self, settings: &liminalkit_shell::ScrollSettings) {
+        self.input.set_scroll_settings(*settings);
     }
 
     fn on_touch(&mut self, event: &TouchEvent) {
@@ -501,6 +554,142 @@ mod tests {
         assert_eq!(app.screen().clicks, 1);
         assert_eq!(app.poll_title().as_deref(), Some("frame 2"));
         assert_eq!(app.poll_title(), None, "one-shot");
+    }
+
+    struct Scroller {
+        scroll: liminalkit_ui::ScrollState,
+    }
+
+    impl Screen for Scroller {
+        fn draw(&mut self, ui: &mut Ui<'_>, _ctx: &mut Context) {
+            let area = Rect::new(0, 0, 200, 100);
+            ui.scroll_list(&mut self.scroll, area, &[30; 40], |_, _, _| {});
+        }
+    }
+
+    #[test]
+    fn a_wheel_sample_reaches_a_scrolling_control_whole_and_at_the_window_scale() {
+        use liminalkit_shell::scroll::GesturePhase;
+        let mut app = App::new(
+            Scroller {
+                scroll: liminalkit_ui::ScrollState::new(),
+            },
+            fonts(),
+        );
+        let notch =
+            |raw: f32| WheelSample::from_lines(0.0, raw, true, GesturePhase::Moved, Duration::ZERO);
+        app.on_cursor(50.0, 50.0);
+        // Four quarter notches, a frame apart. Each is 25 px of the hundred a
+        // notch moves; the adapter used to see none of them, because it only
+        // ever heard the rounded pixel form of the event.
+        for _ in 0..4 {
+            app.on_wheel(&notch(-0.25));
+            let mut buffer = WindowBuffer::new(200, 100);
+            app.render(&mut buffer, Scale::ONE);
+        }
+        assert_eq!(app.screen().scroll.offset(), 100);
+
+        // One notch back, on a display at twice the scale: the same distance
+        // on screen is twice the pixels.
+        app.on_wheel(&notch(1.0));
+        let mut buffer = WindowBuffer::new(200, 100);
+        app.render(&mut buffer, Scale(2.0));
+        assert_eq!(app.screen().scroll.offset(), 0);
+        app.on_wheel(&notch(-1.0));
+        let mut buffer = WindowBuffer::new(200, 100);
+        app.render(&mut buffer, Scale(2.0));
+        assert_eq!(app.screen().scroll.offset(), 200);
+    }
+
+    struct Mover {
+        /// Frames left in which the screen is still drawing something moving.
+        moving: u32,
+        seen: Vec<(Option<Instant>, Duration)>,
+    }
+
+    impl Screen for Mover {
+        fn draw(&mut self, _ui: &mut Ui<'_>, ctx: &mut Context) {
+            self.seen.push((ctx.now, ctx.frame_interval));
+            if self.moving > 0 {
+                self.moving -= 1;
+                ctx.request_frame();
+            }
+        }
+    }
+
+    #[test]
+    fn a_screen_is_told_the_time_and_gets_frames_only_while_it_asks_for_them() {
+        let mut app = App::new(
+            Mover {
+                moving: 2,
+                seen: Vec::new(),
+            },
+            fonts(),
+        );
+        assert_eq!(
+            app.animation_interval(),
+            None,
+            "asleep until something moves"
+        );
+
+        let start = Instant::now();
+        let interval = Duration::from_micros(6_944);
+        let mut buffer = WindowBuffer::new(200, 100);
+        for frame in 0..4_u32 {
+            app.on_frame(&FrameInfo {
+                now: start + interval * frame,
+                interval,
+            });
+            app.render(&mut buffer, Scale::ONE);
+            let expected = if frame < 2 { Some(interval) } else { None };
+            assert_eq!(app.animation_interval(), expected, "after frame {frame}");
+        }
+        assert_eq!(app.screen().seen[1], (Some(start + interval), interval));
+    }
+
+    #[test]
+    fn without_a_clock_a_screen_is_told_there_is_none() {
+        let mut app = App::new(
+            Mover {
+                moving: 0,
+                seen: Vec::new(),
+            },
+            fonts(),
+        );
+        let mut buffer = WindowBuffer::new(200, 100);
+        app.render(&mut buffer, Scale::ONE);
+        assert_eq!(app.screen().seen[0].0, None);
+    }
+
+    #[test]
+    fn the_grab_hand_goes_away_when_a_middle_button_pan_ends() {
+        let mut app = App::new(
+            Scroller {
+                scroll: liminalkit_ui::ScrollState::new(),
+            },
+            fonts(),
+        );
+        let frame = |app: &mut App<Scroller>| {
+            let mut buffer = WindowBuffer::new(200, 100);
+            app.render(&mut buffer, Scale::ONE);
+            app.cursor_shape()
+        };
+        app.on_cursor(50.0, 20.0);
+        assert_eq!(frame(&mut app), CursorShape::Default);
+        app.on_mouse(MouseButton::Middle, true);
+        frame(&mut app);
+        app.on_cursor(50.0, 60.0);
+        assert_eq!(
+            frame(&mut app),
+            CursorShape::Grabbing,
+            "while it is dragged"
+        );
+        app.on_mouse(MouseButton::Middle, false);
+        assert_eq!(frame(&mut app), CursorShape::Default, "and not afterwards");
+        // Nor on any later frame, whatever is pressed.
+        app.on_mouse(MouseButton::Left, true);
+        app.on_mouse(MouseButton::Left, false);
+        assert_eq!(frame(&mut app), CursorShape::Default);
     }
 
     #[test]

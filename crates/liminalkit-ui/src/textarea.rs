@@ -27,6 +27,11 @@ pub struct TextAreaState {
     /// Up/Down so moving through a short line does not lose the column.
     preferred_x: Option<i32>,
     caret_area: Option<Rect>,
+    /// The caret and text length the view was last moved to show, and
+    /// whether the field had focus then. The view follows the caret when
+    /// one of these changes, not on every frame.
+    shown: Option<(usize, usize)>,
+    was_focused: bool,
 }
 
 impl TextAreaState {
@@ -171,13 +176,6 @@ impl Ui<'_> {
         let epoch = self.input.interaction_epoch();
         changed |= state.field.finish_clipboard(focused, epoch);
 
-        let (_, dy) = self.input.take_scroll(area);
-        if dy != 0.0 {
-            let lines = self.wrap_lines(state.field.text(), inner.w, style);
-            let content = lines.ranges.len() as i32 * line_h;
-            state.scroll.scroll_by(-dy.round() as i32, inner.h, content);
-        }
-
         if focused {
             if let Some((px, py)) = self.input.press_position() {
                 if area.contains(px, py) && self.input.take_click(area) {
@@ -296,19 +294,32 @@ impl Ui<'_> {
         let content = lines.ranges.len() as i32 * line_h;
         state.scroll.clamp_to(inner.h, content);
         let caret_row = lines.line_of(state.field.caret());
+        // Bring the caret's line into view when the caret moved, the text
+        // changed or the field has just taken focus, and only then. Doing it
+        // on every frame the field was focused undid a wheel scroll away from
+        // the caret on the very next frame, so a focused field could not be
+        // read anywhere but at its caret.
+        let showing = (state.field.caret(), text.len());
+        let follow = focused && (!state.was_focused || state.shown != Some(showing));
+        state.was_focused = focused;
         if focused {
-            // Keep the caret's line in view.
-            let top = caret_row as i32 * line_h;
-            let offset = state.scroll.offset();
-            if top < offset {
-                state.scroll.scroll_by(top - offset, inner.h, content);
-            } else if top + line_h > offset + inner.h {
-                state
-                    .scroll
-                    .scroll_by(top + line_h - inner.h - offset, inner.h, content);
-            }
+            state.shown = Some(showing);
         }
-        let offset = state.scroll.offset();
+        if follow {
+            state
+                .scroll
+                .reveal(caret_row as i32 * line_h, line_h, inner.h, content);
+        }
+        // A wheel line is a line of this text.
+        let line = f64::from(line_h);
+        let view = state.scroll.update(
+            self.input,
+            area,
+            (inner.w, inner.h),
+            (inner.w, content),
+            (line, line),
+        );
+        let offset = view.offset.1;
 
         self.painter.push_clip(inner);
         if text.is_empty() && !focused {
@@ -434,6 +445,111 @@ mod tests {
 
     fn typed(text: &str) -> Vec<KeyInput> {
         text.chars().map(KeyInput::Character).collect()
+    }
+
+    fn tall_text() -> TextAreaState {
+        let text = (0..60)
+            .map(|line| format!("line {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        TextAreaState::with_text(text)
+    }
+
+    #[test]
+    fn a_focused_field_can_be_scrolled_away_from_its_caret_and_stays_there() {
+        // The view used to snap back to the caret on every focused frame, so
+        // the wheel moved it for one frame and no longer.
+        let mut h = Harness::new();
+        let mut state = tall_text();
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        let at_caret = state.scroll().offset();
+        assert!(at_caret > 0, "the caret is at the end, so the view is too");
+
+        h.input.cursor_moved(50.0, 50.0);
+        h.input.scrolled(0.0, 120.0);
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        let scrolled = state.scroll().offset();
+        assert_eq!(scrolled, at_caret - 120);
+
+        // Frames go by with nothing typed: the view stays where it was put.
+        for _ in 0..3 {
+            h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        }
+        assert_eq!(state.scroll().offset(), scrolled);
+    }
+
+    #[test]
+    fn typing_or_moving_the_caret_brings_it_back_into_view() {
+        let mut h = Harness::new();
+        let mut state = tall_text();
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        let at_caret = state.scroll().offset();
+        h.input.cursor_moved(50.0, 50.0);
+        h.input.scrolled(0.0, 400.0);
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        assert!(state.scroll().offset() < at_caret);
+
+        h.keys(&typed("x"));
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        assert_eq!(state.scroll().offset(), at_caret, "typing shows the caret");
+
+        // Text put in from outside the widget, as an IME commit is.
+        h.input.cursor_moved(50.0, 50.0);
+        h.input.scrolled(0.0, 400.0);
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        state.insert_str("y");
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        assert_eq!(state.scroll().offset(), at_caret);
+    }
+
+    #[test]
+    fn taking_focus_shows_the_caret() {
+        let mut h = Harness::new();
+        let mut state = tall_text();
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", false));
+        assert_eq!(
+            state.scroll().offset(),
+            0,
+            "unfocused, it starts at the top"
+        );
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        assert!(state.scroll().offset() > 0);
+    }
+
+    #[test]
+    fn a_fraction_of_a_wheel_line_scrolls_a_fraction_of_a_line() {
+        use liminalkit_shell::scroll::{GesturePhase, WheelSample};
+        use std::time::Duration;
+        let mut h = Harness::new();
+        let mut state = tall_text();
+        h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        let before = state.scroll().offset();
+        // Eight eighths of a notch, a frame apart: one whole notch in all.
+        h.input.cursor_moved(50.0, 50.0);
+        for step in 0..8 {
+            h.input.wheel(WheelSample::from_lines(
+                0.0,
+                0.125,
+                true,
+                GesturePhase::Moved,
+                Duration::from_millis(step * 16),
+            ));
+            h.frame(|ui| ui.text_area(&mut state, AREA, "", true));
+        }
+        let eighths = before - state.scroll().offset();
+        assert!(eighths > 0);
+
+        let mut whole = tall_text();
+        h.frame(|ui| ui.text_area(&mut whole, AREA, "", true));
+        h.input.wheel(WheelSample::from_lines(
+            0.0,
+            1.0,
+            true,
+            GesturePhase::Moved,
+            Duration::ZERO,
+        ));
+        h.frame(|ui| ui.text_area(&mut whole, AREA, "", true));
+        assert_eq!(before - whole.scroll().offset(), eighths);
     }
 
     #[test]

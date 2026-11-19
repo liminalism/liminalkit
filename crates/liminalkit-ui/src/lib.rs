@@ -14,6 +14,7 @@ pub mod list;
 pub mod menu;
 pub mod overlay;
 pub mod palette;
+pub mod scroll;
 #[cfg(feature = "accessibility")]
 pub mod semantics;
 pub mod textarea;
@@ -34,6 +35,7 @@ pub use list::{ScrollList, ScrollState};
 pub use menu::Menu;
 pub use overlay::{Overlay, OverlayOutcome, Placement};
 pub use palette::{Appearance, OperationalPalette};
+pub use scroll::{Axis, Fling, MiddleButton, ScrollThumb, ScrollTuning, ScrollView};
 pub use textarea::TextAreaState;
 pub use toast::{
     toast_layout, ToastAction, ToastCard, ToastLayout, ToastOutcome, TOAST_MAX_ACTIONS,
@@ -42,6 +44,6 @@ pub use toast::{
 pub use tooltip::Tooltip;
 pub use tooltip::TooltipStyle;
 pub use widget::{
-    column_widths, navigate, Cell, CellAppearance, Column, Row, TableOutcome, TableState,
-    TextFieldState, Theme, Ui, Width,
+    column_widths, navigate, scrollbar_thumb, Cell, CellAppearance, Column, Row, TableOutcome,
+    TableState, TextFieldState, Theme, Ui, Width, MIN_THUMB,
 };

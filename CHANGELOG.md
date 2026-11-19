@@ -43,7 +43,136 @@ than the one it was extracted from can pick up.
   versions, or wants the old look, sets
   `TextCache::set_rendering(TextRendering::UNCORRECTED)`.
 
+- A wheel line is no longer 24 physical pixels. `PixelApp::on_scroll` and
+  `ScrollEvent`'s pixel fields now give a notch three lines of 100/3
+  logical pixels at the window's scale: 100 logical pixels a notch, the
+  same distance on screen at any display scale. An application that
+  tuned its own multiplier against the old 24 moves about four times as far
+  per notch at 100% scale.
+- `App` takes wheel input through `PixelApp::on_wheel` and no longer
+  implements `on_scroll`. A host that drove an `App` by calling
+  `on_scroll` by hand calls `on_wheel` with a `WheelSample`.
+- `ScrollState` is no longer `Eq` (it carries a fraction of a pixel), and
+  the table, scroll list and text area move by a wheel *line* of their own
+  content: a table by rows, a text area by lines of text, three to a notch.
+- `GesturePhase` lives in `liminalkit_shell::scroll`;
+  `liminalkit_windowing::GesturePhase` is the same type re-exported.
+- A drag no longer ends when the pointer leaves the window.
+  `Input::cursor_left` with a button held keeps the button held and the
+  cursor reported (the platform goes on delivering both while it has the
+  pointer captured); `Input::hovering` is false until the release, after
+  which the cursor is gone. Focus loss (`Input::blur`) and
+  `Input::cancel_pointer` still end it. Code that relied on leaving the
+  window to cancel a drag watches for the release.
+- `ScrollState` is no longer plain data: it holds the wheel interpreter and
+  a motion controller for each axis, and lives in `liminalkit_ui::scroll`
+  (still re-exported from the crate root). With a frame clock
+  (`Input::begin_frame`, which `App` supplies) the table, scroll list and
+  text area ease a wheel notch in over a few frames, accelerate a spun
+  wheel, and ask for those frames themselves; a host that never calls
+  `begin_frame` gets the old immediate movement. `ScrollState::reveal`
+  measures from where the view is heading.
+- `CursorShape` lives in `liminalkit_shell`; `liminalkit_windowing`
+  re-exports it. Under `App`, a control's `Input::request_cursor` overrides
+  `Context::cursor` for that frame.
+- A focused `text_area` follows its caret only when the caret moved, the
+  text changed or it has just taken focus. It used to bring the caret back
+  into view on every frame, which undid any wheel scroll away from it.
+
 ### Added
+
+- Wheel input arrives whole. `liminalkit_shell::scroll::WheelSample` is one
+  wheel or touchpad movement in the unit the platform reported (120ths of a
+  notch on Windows, lines, or pixels), with its phase, the modifiers held
+  and when the host received it; `PixelApp::on_wheel` delivers it and
+  `Input::wheel` collects it. `Input` keeps each sample of a frame rather
+  than their sum: `Input::consume_wheel` hands them over one by one,
+  `Input::take_scroll_pixels` converts them with the caller's own line and
+  page size and rounds nothing, and `Input::take_scroll` is unchanged for
+  callers that want the simple form. `ScrollSettings` holds the system's
+  lines-per-notch (default three). `ScrollState::scroll_by_precise` moves
+  both axes by fractional distances and carries what does not yet make a
+  pixel, so a touchpad reporting a third of a pixel a frame scrolls slowly
+  instead of not at all; `ScrollState::offset_x` is the horizontal offset.
+  `scrollbar_thumb` is the one thumb calculation, in 64-bit arithmetic,
+  with a minimum length that follows the display scale. Experimental: not
+  yet calibrated against real devices.
+- `liminalkit_shell::scroll::WheelTrace` writes wheel samples as text and
+  reads them back exactly, and the `scroll_capture` example records what a
+  device sends to a file. `WheelTrace::frames` cuts a recording into the
+  frames a window redrawing at a given interval would have seen.
+- `liminalkit_shell::scroll::WheelInterpreter` says how far a wheel
+  movement goes, and nothing else: it holds no position, so an application
+  with its own scroll model can use it alone. It classes each sample from
+  its value (`InputClass::Notched` for whole notches, `Fine` for fractions,
+  `Precise` for pixel or phased input), converts it with the caller's own
+  line, page and pixel (`Units`, in any unit: pixels or pages), and
+  accelerates whole notches by how quickly they follow one another
+  (`Cadence`), never by how large one is. Continuous input is never
+  accelerated. `WheelProfile::{precision, natural, accelerated,
+  rapid_navigation}` are the presets; Ctrl+wheel comes back as
+  `Interpreted::Zoom` unconverted, Shift turns the wheel sideways, and Alt
+  multiplies. The classifier and the presets were written against three
+  recordings kept in `crates/liminalkit-shell/tests/scroll_traces` (a
+  coarse wheel, a finely graded wheel and a precision touchpad on Windows)
+  and are otherwise uncalibrated.
+- `liminalkit_shell::scroll::MotionController`: one axis of position in any
+  unit, moved over time. A wheel movement is added to a target when it
+  arrives and the position closes on it by a formula in elapsed time
+  (`Smoothing::Exponential`, or `Smoothing::None`), so smoothing changes how
+  a scroll looks and never how far it goes, and a recording replays to the
+  same positions at any frame rate. Also `nudge` (direct), `jump_to`,
+  `animate_to`, `halt`, a speed limit, and a `Ledger` of what was asked for,
+  accepted, refused at an end and dropped on reversing.
+- The `scroll_tuning` example: a long document driven by the two, with the
+  profile, smoothing, lead, device mode and speed limit on the keys, a
+  readout of what each wheel movement was taken for, and record and replay.
+- Scroll regions. `ScrollState::update` is one frame of anything that
+  scrolls: it takes the wheel that belongs to the region, moves, and
+  returns the whole-pixel offset to draw and hit-test at. A press on the
+  content stops a scroll where it was drawn. `ScrollState::scrollbar` makes
+  a bar interactive: the thumb drags one to one, including off the bar and
+  out of the window, and a press beside it pages towards the pointer and
+  repeats while held; the table's and the list's bars now do both.
+  `Ui::scroll_area` scrolls arbitrary content on both axes with bars where
+  needed. `ScrollTuning` (kept in the state) sets the wheel profile,
+  smoothing, lead, page time, `MiddleButton` (`Pan` by default; `Off`,
+  `Autoscroll`, `Both`) and `ScrollBoundary`. Also `animate_to`, `jump_to`,
+  `reveal_animated`, `target`, `is_animating`, `halt`.
+- Nested regions. `Input::route_wheel` gives the wheel to the region inside
+  another even though the outer one draws and asks first, by remembering
+  for one frame which regions were drawn. `ScrollBoundary::Auto` (default)
+  lets a roll that starts at an inner region's end move the outer one, but
+  keeps a roll that runs out part-way where it is; `Contain` never passes
+  it on; `Chain` hands the unused distance outward at once.
+- `Input`: `is_middle_held`, `take_middle_click`, `middle_press_position`,
+  `released` (the button that came up this frame and where),
+  `request_cursor`/`take_cursor_request`; `liminalkit_shell::scroll::
+  host_time` is the clock samples and frames share.
+- `MotionController::fling`: let go at a velocity and coast to a stop the
+  controller knows from the moment of launch (`target`), stopping dead at
+  an end. `ScrollTuning::fling` (off by default) makes content dragged with
+  the pointer carry on when it is let go while moving, and
+  `ScrollTuning::drag_pan` makes the left button drag the content like a
+  hand tool, with the open and closed hand cursors. There is no overscroll
+  in the new controller; `scroll_physics::ScrollAxis` keeps its elastic
+  ends for a touch surface that wants them.
+- A clock for anything that moves. `PixelApp::on_frame` is called before
+  each `render` with `FrameInfo { now, interval }`, where `interval` is one
+  frame of the window's display (from its refresh rate, a sixtieth of a
+  second when it does not say). `Input::begin_frame` and `Input::now` carry
+  the time to the controls, and `Context::now` and `Context::frame_interval`
+  to a `Screen`. `Input::request_frame`, or `Context::request_frame`, asks
+  for one more frame; `App` turns that into an `animation_interval` of one
+  display frame for as long as something keeps asking and goes back to
+  sleeping when nothing does. The KMS host calls `on_frame` too, with the
+  panel's frame as the interval (`Pacer::frame`).
+- A wheel sample delivered straight after a slow tick or frame is marked
+  `after_busy`: it waited in the queue, so its distance in time from its
+  neighbours is not how fast the wheel was turning.
+- `FrameTimer::record_wheel` and `FrameSnapshot::wheel_to_present`: the time
+  from a wheel movement to the frame that showed it, printed with the frame
+  log. A `FrameSnapshot` built by hand needs the new field.
 
 - `CursorShape::Grab` and `CursorShape::Grabbing`: an open and a closed hand
   for something that can be picked up and dragged. Windows has no hand cursor
