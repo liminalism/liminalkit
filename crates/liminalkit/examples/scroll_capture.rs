@@ -24,6 +24,14 @@
 //! - a diagonal stroke on a touchpad, and a sideways one;
 //! - the same with Shift, then Ctrl, held.
 //!
+//! With `--features native` on Windows the recording also carries the
+//! system's wheel settings and, on each sample, `src=touchpad` if the system
+//! reported a touchpad for it:
+//!
+//! ```sh
+//! cargo run -p liminalkit --features native --example scroll_capture -- "touchpad, native"
+//! ```
+//!
 //! EXPERIMENTAL: the recordings this makes are the evidence the scroll
 //! module's defaults are still waiting for.
 
@@ -242,5 +250,16 @@ fn main() {
     capture.reset();
     let config =
         WindowConfig::new("liminalkit scroll capture", 900.0, 600.0).min_size(640.0, 320.0);
+    // Built with `--features native`, the capture runs behind the native
+    // host, which reads the system's wheel settings and passes on whatever
+    // the system says about the device behind each wheel message. That is
+    // how to find out whether it says anything.
+    #[cfg(feature = "native")]
+    run_app(
+        liminalkit::native::NativeControls::new().host(capture),
+        config,
+    )
+    .expect("run");
+    #[cfg(not(feature = "native"))]
     run_app(capture, config).expect("run");
 }

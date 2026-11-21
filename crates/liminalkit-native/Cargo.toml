@@ -1,0 +1,39 @@
+[package]
+name = "liminalkit-native"
+version.workspace = true
+edition.workspace = true
+# winsafe needs 1.87; the rest of the workspace stays on its own floor.
+rust-version = "1.87"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Native operating-system controls inside a liminalkit window: real Win32 buttons, check boxes, combo boxes and text fields (through winsafe) laid out by a software-rendered liminalkit GUI, with a drawn fallback everywhere else."
+keywords = ["gui", "win32", "winsafe", "native", "controls"]
+categories = ["gui"]
+
+[dependencies]
+liminalkit-raster = { workspace = true }
+liminalkit-shell = { workspace = true }
+liminalkit-windowing = { workspace = true }
+winit = { workspace = true }
+accesskit = { version = "0.25", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winsafe = { version = "0.0.27", features = ["comctl", "gdi"] }
+
+[dev-dependencies]
+# The facade and the Noto fixtures, for the example; path only, dropped on
+# publish.
+liminalkit = { path = "../liminalkit", features = ["native"] }
+liminalkit-test-fonts = { workspace = true }
+
+[features]
+# Forward the application's semantic tree through the native-control host.
+accessibility = ["liminalkit-windowing/accessibility", "dep:accesskit"]
+
+# This crate does not inherit the workspace's `unsafe_code = "forbid"`: the
+# Windows backend talks to Win32 (window subclassing, raw child windows), and
+# `forbid` cannot be relaxed for one module. Unsafe stays denied everywhere
+# except `src/win.rs`, which is compiled on Windows only and opts in by name.
+[lints.rust]
+unsafe_code = "deny"

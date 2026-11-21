@@ -117,6 +117,71 @@ record pixelkit.work.explicit-interaction-lifecycles/1 : work {
     }
 }
 
+record pixelkit.work.game-ui-module/1 : work {
+    title "liminalkit-game: layered, animated game UI with planet-conforming windows, renderable on CPU and GPU"
+    state proposed
+    scope [
+        path "crates/liminalkit-game/**",
+        path "crates/liminalkit-raster/src/mesh.rs",
+        path "crates/liminalkit/examples/planet.rs"
+    ]
+    intent """
+        nofurthercontact draws its interface over a full-screen ray-cast planet and needs smooth animation, shimmer and flash effects, an animated notification stack, world-anchored popovers, and windows that lie on the planet and peel off flat when dragged past the limb. Its single full-window buffer costs 4.3 ms to repaint at 1440p, so anything that moves every frame must change geometry and parameters rather than re-rasterise content. SYS may later borrow the renderer-free parts. Integration into nofurthercontact itself is a follow-up, because it pins liminalkit by git revision.
+        """
+    note """
+        EXPERIMENTAL. The reference WGSL is validated and mirrored in Rust but has not run on a real GPU from this workspace.
+        """
+    trace [
+        "Asked for a game UI module for nofurthercontact's planet overlay; the owner chose a separate crate, backend-agnostic GPU output, SYS compatibility by design only, and pinned interactive curved windows.",
+        "The mesh rasteriser went into liminalkit-raster because it needs the painter's crate-private clipped rows; the existing bilinear sampler takes straight alpha and could not be reused.",
+        "Dropped the planned scalar/fast rasteriser pair: the only fast path worth having is the one-to-one flat case, which the compositor sends to draw_buffer instead.",
+        "Attributes are planes evaluated in closed form per pixel and rounded to fixed point, so a one-to-one mesh reproduces the texture exactly and a test can hold it to over_span.",
+        "Input has no coordinate remapping and stores integer positions, so each surface owns an Input fed in its own texels; the router carries the pointer back through the mesh.",
+        "A sheet stores a frame on the surface, not latitude and heading: the exponential map commutes with rotation, which makes a drag one rigid rotation with no solve.",
+        "Lay-down happens on release, not during the drag: the planet fills most of the screen, so a flat window could otherwise never be carried across it.",
+        "Sheets are laid with their x axis level on screen; making up vertical instead left text baselines visibly tilted on ground seen at an angle.",
+        "naga was not added as a dev-dependency: it would raise the test MSRV and lockfile for one check. The shader was validated once from a scratch crate.",
+        "The CPU compositor shades a scratch copy before warping; shading per fragment would have put effect arithmetic inside the generic raster crate.",
+        "Flat layers on whole pixels skip the mesh, shaded or not, after profiling showed the mesh path at about 60 ns a pixel against 5 for a row composite.",
+        "f64::round in the per-pixel path was a library call; replaced by add-half-and-truncate, which gives the same halves-away-from-zero result."
+    ]
+    acceptance {
+        check lints {
+            statement """
+                Clippy is clean with the game feature enabled.
+                """
+            method command
+            command "cargo clippy --workspace --all-targets --features liminalkit/accessibility,liminalkit/bidi,liminalkit/game -- -D warnings"
+        }
+        check planet-example-interactive {
+            statement """
+                In the planet example a window pinned to the sphere follows the rotation, stays clickable while curved, peels off flat when dragged past the limb and lays back down when dropped on the planet.
+                """
+            method manual
+        }
+        check std-core {
+            statement """
+                The game crate's renderer-free core builds and passes its tests without the liminalkit component crates.
+                """
+            method command
+            command "cargo test -p liminalkit-game --no-default-features"
+        }
+        check suite {
+            statement """
+                The workspace test suite passes with the game crate included.
+                """
+            method command
+            command "cargo test --workspace"
+        }
+    }
+    implements [
+        @pixelkit.decision.game-ui-gpu-output-is-backend-agnostic,
+        @pixelkit.decision.game-ui-separate-crate-std-core,
+        @pixelkit.policy.explicit-state-toolkit
+    ]
+    author "dk"
+}
+
 record pixelkit.work.grab-cursors/1 : work {
     title "Grab and Grabbing pointer shapes, drawn on Windows"
     state completed
@@ -175,6 +240,83 @@ record pixelkit.work.hardware-validation/1 : work {
             Section 3: the gesture and scroll-physics layer and the KMS host need validation on actual displays, rotations, refresh rates and touch controllers.
             """
     }
+}
+
+record pixelkit.work.native-controls-macos/1 : work {
+    title "macOS backend for liminalkit-native: AppKit controls inside the winit window"
+    state proposed
+    scope [ path "crates/liminalkit-native/**" ]
+    intent """
+        Make `NativeControls::new().is_native()` true on macOS by adding an AppKit backend beside the Windows one, so the same declared controls become NSButton (push; toggle as NSButtonTypePushOnPushOff; check box as NSButtonTypeSwitch), NSPopUpButton (combo), NSTextField (edit, and a non-editable borderless one for label) added as subviews of the winit window's content view. Scope only: nothing is implemented, and it cannot be built or run on the Windows machine the Windows backend was written on; the owner will test on a MacBook.
+        """
+    note """
+        What the backend has to do, mapped onto the existing seam (crates/liminalkit-native/src/host.rs calls attach on on_native_window, apply(commands, events_read) after each render, detach on on_exit; src/model.rs is platform-neutral and already tested):
+        1. attach: get the NSView from `window.window_handle()` (RawWindowHandle::AppKit, ns_view pointer) and retain it. Converting that pointer to an objc2 `Retained<NSView>` is unsafe, so pixelkit.decision.unsafe-only-in-native-windows-backend must be revised to name a `src/mac.rs` module, or a safe route found (e.g. NSApplication::sharedApplication(mtm).windows() -> contentView()).
+        2. Events: AppKit controls report through target/action. That needs an Objective-C class (objc2 `define_class!`) with one action method that reads the sender's `tag` (set to the ControlId) and pushes into the model via `user_event` / `user_toggled` / `user_selected`; NSTextField needs a delegate for `controlTextDidChange:` (-> `user_text`) and `control:textView:doCommandBySelector:` for insertNewline: (Submitted) and cancelOperation: (Cancelled). After an event, call `window.request_redraw()` (the Windows backend invalidates the HWND).
+        3. Coordinates: Command::Place carries device pixels with a top-left origin; NSView frames are points with a bottom-left origin unless the parent `isFlipped`. Divide by `window.scale_factor()` and flip against the content view height (re-place on resize, which the per-frame placement already causes).
+        4. Focus: return first responder to the winit view after button/popup actions (`window.makeFirstResponder(view)`), mirroring the Windows rule; Command::Focus / FocusCanvas map to makeFirstResponder.
+        5. Layering: softbuffer on macOS presents through a CALayer on the winit view; confirm on the device that subviews draw above it and are not covered when the layer contents update.
+        6. Dependencies: objc2-app-kit 0.3 and objc2-foundation 0.3 are already in the graph for liminalkit-shell's pasteboard (features there: NSPasteboard, NSGraphics); this needs NSButton, NSPopUpButton, NSTextField, NSControl, NSView, NSWindow, NSResponder, NSApplication.
+        7. Verification: `cargo run -p liminalkit-native --example native_selftest` is the acceptance harness; its `os` module is Windows-only and needs a macOS twin that drives the controls with `performClick:` and `setStringValue:` + the delegate call. `native_controls` is the visual check.
+        Open questions for the device: whether AppKit's key-view loop makes Tab traversal work for free; whether NSButton bezel styles look right over a dark drawn frame without `set_backdrop` equivalents.
+        """
+    acceptance {
+        check controls-visible-on-macos {
+            statement """
+                On a Mac, `native_controls` shows AppKit controls above the drawn frame at the laid-out rectangles at 1x and 2x.
+                """
+            method observation
+        }
+        check selftest-passes-on-macos {
+            statement """
+                On a Mac, `native_selftest` runs in native mode and every check passes against real AppKit controls.
+                """
+            method command
+            command "cargo run -p liminalkit-native --example native_selftest"
+        }
+    }
+    after [ @pixelkit.work.native-controls-windows ]
+    depends_on [ @pixelkit.decision.unsafe-only-in-native-windows-backend ]
+    author "dk"
+}
+
+record pixelkit.work.native-controls-windows/1 : work {
+    title "Native Win32 controls (through winsafe) inside a liminalkit window, with a drawn fallback"
+    state completed
+    scope [ path "crates/liminalkit-native/**", path "crates/liminalkit/src/native.rs" ]
+    intent """
+        A GUI built entirely with liminalkit can hand chosen controls to Windows: buttons, toggles, check boxes, combos, text fields and labels declared through `liminalkit_native::NativeControls`, placed each frame at device-pixel rectangles, realised as Win32 child controls in the winit window, with events and state readable in immediate-mode style and a drawn fallback (`is_native() == false`) on other platforms. Facade feature `native` adds `liminalkit::native::{button, toggle, label}`.
+        """
+    note """
+        Known limits, documented in crates/liminalkit-native/README.md: native controls are always above the drawn frame (drawn overlays cannot cover them); Tab does not traverse native controls (winit does not run IsDialogMessage); buttons/combos/edits use the system theme, only labels and check boxes take a backdrop colour; themed controls need a Common Controls 6 manifest in the application. The non-Windows build of the crate was not compiled on the machine the work was done on (no usable non-Windows target installed).
+        """
+    acceptance {
+        check drawn-frame-and-controls-coexist {
+            statement """
+                In a running window the software-drawn frame and themed native controls are both visible, neither painted over the other, and the same screen renders with drawn controls when native is turned off.
+                """
+            method observation
+            verified_by [ @pixelkit.evidence.native-controls-screenshots/1 ]
+        }
+        check real-controls-respond {
+            statement """
+                On Windows, the declared controls exist as visible Win32 child windows at the laid-out rectangles, and clicks, toggles, combo picks, typing, Enter and Escape are reported as events, with focus returning to the canvas; programmatic set_* calls reach the controls without being reported; an unplaced control is hidden.
+                """
+            method command
+            command "cargo run -p liminalkit-native --example native_selftest"
+            verified_by [ @pixelkit.evidence.native-controls-selftest/1 ]
+        }
+        check suite-green {
+            statement """
+                The workspace test suite passes with the native feature enabled and clippy reports nothing.
+                """
+            method command
+            command "cargo test --workspace --features liminalkit/native"
+            verified_by [ @pixelkit.evidence.native-controls-suite/1 ]
+        }
+    }
+    implements [ @pixelkit.decision.unsafe-only-in-native-windows-backend ]
+    author "dk"
 }
 
 record pixelkit.work.performance-comparison/1 : work {

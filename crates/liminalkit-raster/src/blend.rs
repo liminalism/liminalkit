@@ -220,6 +220,34 @@ pub fn over_span(destination: &mut [u32], source: &[u32], xrgb: bool) {
     }
 }
 
+/// Scale every channel of a premultiplied pixel by `by / 255`, rounded to
+/// nearest: how a prepared image or a layer is faded. 255 returns the pixel
+/// untouched, and a result never has a colour channel above its alpha.
+#[inline]
+pub fn scale_premultiplied(pixel: u32, by: u8) -> u32 {
+    if by == 255 {
+        return pixel;
+    }
+    let by = u32::from(by);
+    let channel = |shift: u32| div255(((pixel >> shift) & 0xff) * by + 127) << shift;
+    channel(24) | channel(16) | channel(8) | channel(0)
+}
+
+/// [`over_span`] with the source first faded to `opacity` (255 opaque): a
+/// premultiplied layer composited at an opacity. Stops at the shorter slice.
+#[inline]
+pub fn over_span_faded(destination: &mut [u32], source: &[u32], opacity: u8, xrgb: bool) {
+    match opacity {
+        0 => {}
+        255 => over_span(destination, source, xrgb),
+        _ => {
+            for (d, &s) in destination.iter_mut().zip(source) {
+                *d = over_pixel(*d, scale_premultiplied(s, opacity), xrgb);
+            }
+        }
+    }
+}
+
 /// Source-over an RGB colour with coverage onto a premultiplied ARGB destination.
 /// Unlike the XRGB kernel, the alpha lane is accumulated and RGB never exceeds alpha.
 #[inline]

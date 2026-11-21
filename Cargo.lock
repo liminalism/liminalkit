@@ -1145,13 +1145,26 @@ name = "liminalkit"
 version = "0.5.0"
 dependencies = [
  "accesskit",
+ "liminalkit-game",
  "liminalkit-kms",
+ "liminalkit-native",
  "liminalkit-raster",
  "liminalkit-shell",
  "liminalkit-test-fonts",
  "liminalkit-text",
  "liminalkit-ui",
  "liminalkit-windowing",
+]
+
+[[package]]
+name = "liminalkit-game"
+version = "0.5.0"
+dependencies = [
+ "liminalkit-raster",
+ "liminalkit-shell",
+ "liminalkit-test-fonts",
+ "liminalkit-text",
+ "liminalkit-ui",
 ]
 
 [[package]]
@@ -1165,6 +1178,20 @@ dependencies = [
  "liminalkit-shell",
  "liminalkit-windowing",
  "rustix 1.1.4",
+]
+
+[[package]]
+name = "liminalkit-native"
+version = "0.5.0"
+dependencies = [
+ "accesskit",
+ "liminalkit",
+ "liminalkit-raster",
+ "liminalkit-shell",
+ "liminalkit-test-fonts",
+ "liminalkit-windowing",
+ "winit",
+ "winsafe",
 ]
 
 [[package]]
@@ -3004,6 +3031,12 @@ checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "winsafe"
+version = "0.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcfff8264c3af1b0352006934e2265365ecb5a145aee88e770dc8b82e0456f4f"
 
 [[package]]
 name = "wit-bindgen"

@@ -1,0 +1,31 @@
+[package]
+name = "liminalkit-game"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "EXPERIMENTAL game UI for liminalkit: layered caller-owned surfaces, tweens and springs, shimmer / flash / glow effects, an animated notification stack, world-anchored popovers, and windows that conform to a planet and peel off flat. One frame description drawn by a CPU compositor or by the host's GPU, with no GPU dependency."
+keywords = ["gui", "game", "hud", "animation", "immediate-mode"]
+categories = ["gui", "game-development", "rendering"]
+
+[dependencies]
+liminalkit-raster = { workspace = true, optional = true }
+liminalkit-text = { workspace = true, optional = true }
+liminalkit-shell = { workspace = true, optional = true }
+liminalkit-ui = { workspace = true, optional = true }
+
+[dev-dependencies]
+liminalkit-test-fonts = { workspace = true }
+
+[features]
+default = ["surfaces"]
+# Layers, the CPU compositor, input routing and warped windows, on top of the
+# liminalkit component crates. Without it the crate needs only std: animation,
+# effect parameters and their scalar specification, the notification queue,
+# anchoring, and the sphere / cylinder / plane geometry.
+surfaces = ["dep:liminalkit-raster", "dep:liminalkit-text", "dep:liminalkit-shell", "dep:liminalkit-ui"]
+
+[lints]
+workspace = true

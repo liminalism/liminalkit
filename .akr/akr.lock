@@ -5,7 +5,7 @@ build {
     tool "akr 0.7.0"
     grammar "0.1"
     vocabulary "0.3"
-    source_graph "sha256:573e375cfb2b89135b5ffe788d4c5006b940c21a627f74d748e23b33da101d57"
+    source_graph "sha256:f8702b3a73acb3caaa89ee0ffac2bdf44564b94ff60e83cfd804e651207459dd"
 }
 
 source ".akr/project.akr" {
@@ -14,13 +14,13 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/pixelkit/decisions.akr" {
-    hash "sha256:dd25cd3c807619d781500e5d160b4b0c820e15b3f4f95729b540d0b78916524d"
-    records 9
+    hash "sha256:084409f89755afb31578ad5b4c7fb65049d26708c31c6eac270b83ff1ceb1347"
+    records 12
 }
 
 source ".akr/records/pixelkit/evidence.akr" {
-    hash "sha256:2218c63c3d29d97c0cdffbe3289b0344498b249bfabf214391281a822a6c757c"
-    records 34
+    hash "sha256:9229e249f0fe2f9eefccf6b1fd746f4a5a2636bf91cd0e332172c63b6159f288"
+    records 38
 }
 
 source ".akr/records/pixelkit/observations.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:d6f523b41f7146d9bbfc80142021729fd8576bead1941db4f5b97ecab2b3d7b0"
-    records 17
+    hash "sha256:13b1ec93642e0c58473b384f9be9f5a4ee24371798d1072510d917665c070dc8"
+    records 20
 }
 
 resolution @pixelkit.decision.bidi-behind-feature/1 {
@@ -67,6 +67,18 @@ resolution @pixelkit.decision.device-pixel-rects/1 {
 }
 
 resolution @pixelkit.decision.facade-crate-and-app-adapter/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.game-ui-gpu-output-is-backend-agnostic/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
+resolution @pixelkit.decision.game-ui-separate-crate-std-core/1 {
     slot implements
     to @pixelkit.policy.explicit-state-toolkit/1
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
@@ -138,10 +150,46 @@ resolution @pixelkit.work.adoptability-pass/1 {
     hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
 }
 
+resolution @pixelkit.work.game-ui-module/1 {
+    slot implements
+    to @pixelkit.decision.game-ui-gpu-output-is-backend-agnostic/1
+    hash "sha256:dfe334f78319e3b55bce8a0448e769a4e9c142c160128820df608cccb9f10aae"
+}
+
+resolution @pixelkit.work.game-ui-module/1 {
+    slot implements
+    to @pixelkit.decision.game-ui-separate-crate-std-core/1
+    hash "sha256:3d9dc6ae2d7d6ecddf82ff4bdd718618e4f83726713be8d88a1bd0e752796a14"
+}
+
+resolution @pixelkit.work.game-ui-module/1 {
+    slot implements
+    to @pixelkit.policy.explicit-state-toolkit/1
+    hash "sha256:9be287129b701f1bfb1a6cd82f3232665a6647c2e543b2543cb66fa7a4ebd574"
+}
+
 resolution @pixelkit.work.hardware-validation/1 {
     slot after
     to @pixelkit.work.adoptability-pass/1
     hash "sha256:f721efdbdb4b08ccb6273cdbe53450d731ed234a1fdac7c03ec4675598d0005f"
+}
+
+resolution @pixelkit.work.native-controls-macos/1 {
+    slot after
+    to @pixelkit.work.native-controls-windows/1
+    hash "sha256:a382ba0caa981f51431a8866a8d971ec4d076359fa864d64a821a5cd87b30e47"
+}
+
+resolution @pixelkit.work.native-controls-macos/1 {
+    slot depends_on
+    to @pixelkit.decision.unsafe-only-in-native-windows-backend/1
+    hash "sha256:b668ff8243300ab87ad40e165707c49d066b9912279af767735842e8293eed70"
+}
+
+resolution @pixelkit.work.native-controls-windows/1 {
+    slot implements
+    to @pixelkit.decision.unsafe-only-in-native-windows-backend/1
+    hash "sha256:b668ff8243300ab87ad40e165707c49d066b9912279af767735842e8293eed70"
 }
 
 resolution @pixelkit.work.performance-comparison/1 {
@@ -260,6 +308,11 @@ seal @pixelkit.evidence.gallery-renders-at-2x/1 {
     hash "sha256:683cbea3678258ea56bd3bf34a504d5f512ab2cc53fcd3d48e631bb225661da5"
 }
 
+seal @pixelkit.evidence.game-planet-scripted-drag/1 {
+    state verified
+    hash "sha256:ad0406c1320653032967fce675b60579ea5b0d4d6fc548db7294e8e9b3e78d52"
+}
+
 seal @pixelkit.evidence.grab-cursors-lege-gui-20261109/1 {
     state verified
     hash "sha256:bef269638d106779256bcd30a0693974d4ba175aa01272180a4ad1ff4f8aa9f7"
@@ -298,6 +351,21 @@ seal @pixelkit.evidence.interaction-lifecycle-state-review/1 {
 seal @pixelkit.evidence.legeos-workspace-format-20261009/1 {
     state verified
     hash "sha256:7be3c4e877ed80d33a38f802bcf894f66e84bdbe475234b7ba532f7a87109d7e"
+}
+
+seal @pixelkit.evidence.native-controls-screenshots/1 {
+    state verified
+    hash "sha256:f40d55ea40052d6ce3e554d237911189a7005750d5bfb91e6d2f7c703a2cc8b7"
+}
+
+seal @pixelkit.evidence.native-controls-selftest/1 {
+    state verified
+    hash "sha256:a52246acb61f21eec0943aec1e13d665c1bc9f92a2542289d15e82b1ebf5d9ce"
+}
+
+seal @pixelkit.evidence.native-controls-suite/1 {
+    state verified
+    hash "sha256:494265b51ffa64cbf00076838f70f3ffd4199051230e99e68b765fa2287cbb7c"
 }
 
 seal @pixelkit.evidence.scroll-stage1-suite/1 {
@@ -493,6 +561,11 @@ seal @pixelkit.work.explicit-interaction-lifecycles/1 {
 seal @pixelkit.work.grab-cursors/1 {
     state completed
     hash "sha256:7ac0b6ab510c68c712d8c10d01e0abd71436b188d90cb7c8a4a384b658c4c887"
+}
+
+seal @pixelkit.work.native-controls-windows/1 {
+    state completed
+    hash "sha256:a382ba0caa981f51431a8866a8d971ec4d076359fa864d64a821a5cd87b30e47"
 }
 
 seal @pixelkit.work.smooth-rounded-surfaces/1 {

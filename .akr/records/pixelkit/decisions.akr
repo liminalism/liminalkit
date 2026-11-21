@@ -88,6 +88,42 @@ record pixelkit.decision.facade-crate-and-app-adapter/1 : decision {
     }
 }
 
+record pixelkit.decision.game-ui-gpu-output-is-backend-agnostic/1 : decision {
+    title "The game UI's GPU path is frame data and reference WGSL the host draws; liminalkit takes no GPU dependency"
+    state proposed
+    scope [ path "crates/liminalkit-game/**" ]
+    topic game-gpu-output
+    decision """
+        liminalkit-game describes a frame once: per-layer premultiplied textures with revisions and damage, warp meshes, resolved effect uniforms, and WGSL source as strings. A GPU host uploads and draws that with its own API; the CPU compositor draws the same description in software. The scalar Rust shading function and the integer mesh rasteriser are the specification both are held to.
+        """
+    context """
+        The owner chose this over a built-in wgpu renderer. The two games it serves pin different wgpu versions (nofurthercontact 30, SYS 29), so a renderer inside liminalkit could serve at most one, and the standing positioning policy rules out a mandatory GPU stack. A CPU-only design was rejected because a pinned window moves every frame the globe turns, which a CPU path can only follow by repainting.
+        """
+    consequences """
+        liminalkit cannot run its own shaders: agreement is checked by an exported parity table, a Rust mirror of the fragment maths, and WGSL validation, and the first real-GPU check happens in a host. The vertex and uniform layouts are a published contract; changing them is a breaking change for hosts.
+        """
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}
+
+record pixelkit.decision.game-ui-separate-crate-std-core/1 : decision {
+    title "Game UI lives in its own crate, liminalkit-game, whose animation, effect, notification and anchoring core needs only std"
+    state proposed
+    scope [ path "crates/liminalkit-game/**", path "crates/liminalkit/Cargo.toml" ]
+    topic game-crate-boundary
+    decision """
+        Layered surfaces, per-frame animation and warped windows go in a new crate re-exported from the facade behind a `game` feature, not in liminalkit-ui. Its `surfaces` feature (on by default) brings in the raster, text, shell and ui crates; without it the crate is std-only. All state stays in caller-owned structs and time comes from the host, as for scrolling.
+        """
+    context """
+        The owner chose a separate crate over a module in liminalkit-ui. The toolkit is positioned for operational screens that cost nothing when idle; offscreen layers, a mesh rasteriser and continuous animation serve a different kind of application and should not be compiled into every user of the widget crate. The std-only split exists because SYS does not use liminalkit and liminalkit-shell pulls clipboard dependencies it has no use for.
+        """
+    consequences """
+        The general tween and spring types live in the game crate, not in shell; if the widget crate ever needs them they move down and are re-exported. liminalkit-raster gains a textured-mesh rasteriser and a buffer-to-buffer composite because those need the painter's private clip.
+        """
+    implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}
+
 record pixelkit.decision.no-directmanipulation-yet/1 : decision {
     title "Do not build DirectManipulation touchpad input yet; classify Windows touchpad input from the wheel stream"
     state proposed
@@ -184,6 +220,22 @@ record pixelkit.decision.test-fonts-unpublished-crate/1 : decision {
         The README quick start embeds a face explicitly, which is what an application does anyway. Dependent crates cannot be cargo-packaged until liminalkit-raster is on crates.io, so the dev-dependency stripping is cargo's documented behaviour rather than something observed here; the package file list of liminalkit-text was observed to contain no fonts.
         """
     implements [ @pixelkit.policy.explicit-state-toolkit ]
+    author "dk"
+}
+
+record pixelkit.decision.unsafe-only-in-native-windows-backend/1 : decision {
+    title "Unsafe code is allowed in one place: the Windows backend module of liminalkit-native"
+    state proposed
+    scope [ path "Cargo.toml", path "crates/liminalkit-native/**" ]
+    decision """
+        The workspace keeps `unsafe_code = "forbid"` for every crate except `liminalkit-native`. That crate does not inherit the workspace lints; it sets `unsafe_code = "deny"` and allows unsafe by name on a single module, `src/win.rs`, which is compiled on Windows only. Native controls are embedded in the ordinary winit window (winit keeps the window, event loop, IME, cursors and multi-window; softbuffer keeps presenting), not by replacing the host with a winsafe-owned window.
+        """
+    context """
+        The owner asked on 2026-11-12 for winsafe controls inside liminalkit windows and, mid-task, to change the crate rules to allow unsafe for Windows builds. WINSAFE_INTEGRATION_FEASIBILITY.md had found that without unsafe the only route was a winsafe::gui::WindowMain host that re-implements input and IME translation (its Option B), because winsafe::gui controls accept only winsafe's own windows as parents (sealed GuiParent) and winit ignores WM_COMMAND. With unsafe, winsafe's raw CreateWindowEx, HWND::from_ptr and SetWindowSubclass make the report's Option A workable: child controls in the winit window, a subclass to hear them, WS_CLIPCHILDREN so the frame is not blitted over them. `forbid` cannot be relaxed per module, hence the crate opts out of the workspace lint table rather than the workspace rule changing.
+        """
+    consequences """
+        Every other crate still cannot contain unsafe. The invariants the unsafe code relies on (single UI thread; the leaked Rc<Shared> released exactly once by detach or WM_NCDESTROY; children destroyed before that release; no model borrow held across a message-sending call) are written at the top of src/win.rs and must be kept true by any change there. A future macOS backend that needs unsafe would need this decision revised to name its module too. liminalkit-native has rust-version 1.87 (winsafe's floor), above the workspace's 1.85.
+        """
     author "dk"
 }
 

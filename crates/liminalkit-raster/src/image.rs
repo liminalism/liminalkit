@@ -17,10 +17,10 @@
 //! returning.
 
 use crate::bitmap::{alpha_of, Bitmap};
-use crate::blend::{div255, over_pixel, over_span};
+use crate::blend::{div255, over_pixel, over_span, over_span_faded, scale_premultiplied};
 use crate::color::mix;
 use crate::kernel::{FillRule, RasterKernel};
-use crate::painter::{Painter, Rect};
+use crate::painter::{Painter, Rect, WindowBuffer};
 use crate::path::Path;
 
 /// How a bitmap of one shape fills a rectangle of another.
@@ -273,6 +273,30 @@ impl Painter<'_> {
         }
     }
 
+    /// Composite the `from` region of a premultiplied buffer (one painted with
+    /// [`Painter::new_premultiplied`]) with its top-left corner at `(x, y)`,
+    /// at `opacity` (255 opaque): how an offscreen layer lands on a frame.
+    /// `from` is cut to the source; the clip cuts the rest. Source-over, into
+    /// either kind of painter.
+    pub fn draw_buffer(&mut self, source: &WindowBuffer, from: Rect, x: i32, y: i32, opacity: u8) {
+        let bounds = Rect::new(0, 0, source.width as i32, source.height as i32);
+        let cut = from.intersect(bounds);
+        if opacity == 0 || cut.is_empty() {
+            return;
+        }
+        // Where the cut region lands once `from`'s own corner is at (x, y).
+        let (x, y) = (x + (cut.x - from.x), y + (cut.y - from.y));
+        let xrgb = !self.is_premultiplied();
+        let stride = source.width as usize;
+        for row in 0..cut.h {
+            let Some((skip, dest)) = self.clipped_run(x, y + row, cut.w as usize) else {
+                continue;
+            };
+            let left = (cut.y + row) as usize * stride + cut.x as usize + skip;
+            over_span_faded(dest, &source.pixels[left..left + dest.len()], opacity, xrgb);
+        }
+    }
+
     /// Fill `rect` with a linear gradient between two `0xRRGGBB` colours,
     /// computed per row (vertical) or once per column and copied (horizontal):
     /// a full-screen gradient costs about what a full-screen fill does.
@@ -301,16 +325,6 @@ impl Painter<'_> {
             }
         }
     }
-}
-
-#[inline]
-fn scale_premultiplied(pixel: u32, by: u8) -> u32 {
-    if by == 255 {
-        return pixel;
-    }
-    let by = u32::from(by);
-    let channel = |shift: u32| div255(((pixel >> shift) & 0xff) * by + 127) << shift;
-    channel(24) | channel(16) | channel(8) | channel(0)
 }
 
 #[inline]
@@ -423,7 +437,6 @@ fn resample(bitmap: &Bitmap, src: [f64; 4], dst: [u32; 4], stride: u32, out: &mu
 mod tests {
     use super::*;
     use crate::bitmap::argb;
-    use crate::painter::WindowBuffer;
 
     fn checker(size: u32) -> Bitmap {
         let mut b = Bitmap::new(size, size);
@@ -611,6 +624,79 @@ mod tests {
         let mut buffer = WindowBuffer::new(2, 1);
         Painter::new_premultiplied(&mut buffer).draw_image_faded(&image, 0, 0, 128);
         assert_eq!(buffer.pixels[0], 0x8080_8080);
+    }
+
+    /// A premultiplied layer with a different valid pixel in every cell.
+    fn layer(width: u32, height: u32) -> WindowBuffer {
+        let mut layer = WindowBuffer::new(width, height);
+        for (i, pixel) in layer.pixels.iter_mut().enumerate() {
+            let alpha = (i as u32 * 37 + 11) % 256;
+            let grey = alpha * ((i as u32 * 13) % 256) / 255;
+            *pixel = (alpha << 24) | (grey << 16) | ((grey / 2) << 8) | grey;
+        }
+        layer
+    }
+
+    #[test]
+    fn a_buffer_composites_like_its_rows_would_span_by_span() {
+        let source = layer(5, 4);
+        for premultiplied in [false, true] {
+            for opacity in [255u8, 128, 1] {
+                let mut actual = WindowBuffer::new(9, 7);
+                actual.pixels.fill(0x0040_8020);
+                let mut expected = actual.clone();
+                let mut painter = if premultiplied {
+                    Painter::new_premultiplied(&mut actual)
+                } else {
+                    Painter::new(&mut actual)
+                };
+                painter.draw_buffer(&source, Rect::new(0, 0, 5, 4), 2, 1, opacity);
+                for row in 0..4usize {
+                    let at = (row + 1) * 9 + 2;
+                    over_span_faded(
+                        &mut expected.pixels[at..at + 5],
+                        &source.pixels[row * 5..row * 5 + 5],
+                        opacity,
+                        !premultiplied,
+                    );
+                }
+                assert_eq!(actual.pixels, expected.pixels, "{premultiplied} {opacity}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_buffer_region_is_cut_to_the_source_and_to_the_clip() {
+        let source = layer(4, 4);
+        let mut buffer = WindowBuffer::new(8, 8);
+        let mut painter = Painter::new_premultiplied(&mut buffer);
+        painter.push_clip(Rect::new(0, 0, 3, 8));
+        // A region hanging off the source's top-left, placed off the buffer's.
+        painter.draw_buffer(&source, Rect::new(-2, -2, 5, 5), -1, -1, 255);
+        painter.pop_clip();
+        // Source (0, 0) lands at (-1 + 2, -1 + 2) = (1, 1).
+        assert_eq!(buffer.pixels[8 + 1], source.pixels[0]);
+        assert_eq!(buffer.pixels[8 + 2], source.pixels[1]);
+        assert_eq!(buffer.pixels[8 + 3], 0, "outside the clip");
+        assert_eq!(buffer.pixels[0], 0, "outside the region");
+        assert_eq!(buffer.pixels[4 * 8 + 1], 0, "past the region's last row");
+
+        let mut untouched = WindowBuffer::new(4, 4);
+        Painter::new_premultiplied(&mut untouched).draw_buffer(
+            &source,
+            Rect::new(0, 0, 4, 4),
+            0,
+            0,
+            0,
+        );
+        Painter::new_premultiplied(&mut untouched).draw_buffer(
+            &source,
+            Rect::new(9, 9, 2, 2),
+            0,
+            0,
+            255,
+        );
+        assert!(untouched.pixels.iter().all(|&p| p == 0));
     }
 
     #[test]

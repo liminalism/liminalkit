@@ -21,14 +21,18 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --features liminalkit/accessibility,liminalkit/bidi -- -D warnings
+        run: cargo clippy --workspace --all-targets --features liminalkit/accessibility,liminalkit/bidi,liminalkit/game -- -D warnings
       - name: Test
         run: cargo test --workspace
+      - name: Test the game crate's std-only core
+        run: cargo test -p liminalkit-game --no-default-features
+      - name: Game example renders
+        run: cargo run --release -p liminalkit --example planet --features game -- --frames 30
       - name: Test with bidi
         run: cargo test -p liminalkit-text --features bidi
       - name: Test with accessibility
         run: cargo test -p liminalkit -p liminalkit-ui --features liminalkit/accessibility,liminalkit-ui/accessibility
       - name: Docs
-        run: cargo doc --workspace --no-deps --features liminalkit/accessibility,liminalkit/bidi
+        run: cargo doc --workspace --no-deps --features liminalkit/accessibility,liminalkit/bidi,liminalkit/game
       - name: Gallery renders
         run: cargo run -p liminalkit-ui --example gallery -- 2.0

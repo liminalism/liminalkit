@@ -21,6 +21,7 @@ pub mod gamma;
 pub mod icon;
 pub mod image;
 pub mod kernel;
+pub mod mesh;
 pub mod painter;
 pub mod path;
 pub mod png;

@@ -81,6 +81,49 @@ than the one it was extracted from can pick up.
 
 ### Added
 
+- **Experimental: game UI, as a new crate.** `liminalkit-game`, re-exported as
+  `liminalkit::game` behind the facade's `game` feature, is an interface over
+  a rendered scene. A `Layer` is a `Surface` (a premultiplied buffer the
+  ordinary `Ui` paints into, with its own `Input` in its own coordinates), a
+  `Sheet` (where that picture goes this frame) and `Effects` (shimmer, flash,
+  glow, scanlines, pop). Moving, fading and every effect are done to the
+  painted picture, so nothing is repainted to animate. `anim` has `Tween`,
+  `Spring`, `Ease` and `Envelope`, driven by host time and settling at once
+  when there is no clock; `notify::NoticeQueue` is a notification stack with
+  priorities, lifetimes that pause on hover, coalescing and animated
+  enter, leave and make-room; `anchor::place` puts a popover beside a moving
+  screen point. `input::Router` gives each pointer event to the topmost layer
+  it is really on and reports whether the interface took it.
+  A `Sheet` can lie on a `Sphere`, `Cylinder` or `Plane` seen through the
+  host's camera (`view::View`, with a ready `Pinhole`): a window pinned to a
+  planet turns with it, slides over the surface when dragged with the held
+  point under the cursor, peels off into a flat window past the horizon, and
+  lays back down when dropped. Its controls work throughout, because input is
+  carried back through the mesh that was drawn.
+  One `GameFrame` is drawn by `composite::composite` on the CPU or by a host's
+  GPU from `GameFrame::gpu` and the reference WGSL in `gpu`: textures with
+  revisions and damage, meshes, and a 144-byte uniform block. The crate has no
+  GPU dependency. With `default-features = false` it needs only `std` and
+  keeps animation, effect parameters, notifications, anchoring and geometry.
+  Not known: the shader is validated and mirrored in Rust but has not run on a
+  GPU from this workspace; durations and fades are judged by eye on one
+  desktop; the CPU compositor measured about 13 ms a frame for the example's
+  interface at 1280×720, and is a reference and fallback rather than a way to
+  run a busy interface at 4K. `cargo run --release -p liminalkit --example
+  planet --features game`.
+- `liminalkit_raster::mesh`: `Painter::draw_textured_mesh` draws a
+  premultiplied buffer through a mesh of screen-space triangles, each vertex
+  naming its texel, opacity and light: the one primitive that is not
+  axis-aligned. Positions snap to 1/256 px and coverage is by integer edge
+  functions under the top-left rule, so a translucent mesh has no doubly
+  blended seams; a one-to-one mesh reproduces its texture byte for byte; the
+  texture's edge is anti-aliased analytically; optional smaller levels are
+  sampled where texels land smaller than pixels.
+  `sample_bilinear_premultiplied` is its sampler.
+- `Painter::draw_buffer` composites a region of a premultiplied
+  `WindowBuffer` at an opacity: an offscreen layer onto a frame.
+  `blend::over_span_faded` is its row, and `blend::scale_premultiplied` is now
+  public.
 - Wheel input arrives whole. `liminalkit_shell::scroll::WheelSample` is one
   wheel or touchpad movement in the unit the platform reported (120ths of a
   notch on Windows, lines, or pixels), with its phase, the modifiers held
@@ -157,6 +200,17 @@ than the one it was extracted from can pick up.
   hand tool, with the open and closed hand cursors. There is no overscroll
   in the new controller; `scroll_physics::ScrollAxis` keeps its elastic
   ends for a touch surface that wants them.
+- With `liminalkit-native` on Windows the system's wheel settings are read
+  (lines per notch, a page per notch, or the wheel off; characters
+  sideways) at start-up and whenever they change, and delivered through the
+  new `PixelApp::on_scroll_settings`, which `App` passes to `Input`. The
+  plain host still assumes three lines. Experimental: a wheel sample is
+  marked `SourceHint::Touchpad` when the system says a touchpad sent the
+  message. On the one machine tried it said so for none of 89 touchpad
+  messages, which matches the documented need for the thread to register
+  as touchpad-aware; no registration is done, and the classifier does not
+  depend on the hint. Build `scroll_capture` with `--features native` to
+  see what a machine reports.
 - A clock for anything that moves. `PixelApp::on_frame` is called before
   each `render` with `FrameInfo { now, interval }`, where `interval` is one
   frame of the window's display (from its refresh rate, a sixtieth of a
@@ -173,6 +227,17 @@ than the one it was extracted from can pick up.
 - `FrameTimer::record_wheel` and `FrameSnapshot::wheel_to_present`: the time
   from a wheel movement to the frame that showed it, printed with the frame
   log. A `FrameSnapshot` built by hand needs the new field.
+
+- `liminalkit-native`: operating-system controls inside a liminalkit window.
+  On Windows, declared buttons, toggles, check boxes, combos, text fields
+  and labels are Win32 child controls (through `winsafe`) placed each frame
+  at device-pixel rectangles on top of the drawn frame, in the ordinary
+  winit window; elsewhere `NativeControls::is_native()` is `false` and the
+  application draws them. `liminalkit` feature `native` adds
+  `liminalkit::native::{button, toggle, label}`, which place the native
+  control or draw liminalkit's. The workspace's `unsafe_code = "forbid"`
+  now has one exception: this crate denies unsafe and allows it in its
+  Windows-only backend module.
 
 - `CursorShape::Grab` and `CursorShape::Grabbing`: an open and a closed hand
   for something that can be picked up and dragged. Windows has no hand cursor

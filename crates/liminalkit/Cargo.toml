@@ -17,6 +17,8 @@ liminalkit-shell = { workspace = true }
 liminalkit-ui = { workspace = true }
 liminalkit-windowing = { workspace = true }
 liminalkit-kms = { workspace = true, optional = true }
+liminalkit-native = { workspace = true, optional = true }
+liminalkit-game = { workspace = true, optional = true }
 accesskit = { version = "0.25", optional = true }
 
 [dev-dependencies]
@@ -26,12 +28,22 @@ liminalkit-test-fonts = { workspace = true }
 [features]
 default = []
 # Expose drawn controls to assistive technology through AccessKit.
-accessibility = ["liminalkit-ui/accessibility", "liminalkit-windowing/accessibility", "dep:accesskit"]
+accessibility = ["liminalkit-ui/accessibility", "liminalkit-windowing/accessibility", "liminalkit-native?/accessibility", "dep:accesskit"]
 # The Linux DRM/KMS and evdev host, as `liminalkit::kms`.
 kms = ["dep:liminalkit-kms"]
+# Operating-system controls inside a liminalkit window, as
+# `liminalkit::native`: Win32 controls on Windows, drawn ones elsewhere.
+native = ["dep:liminalkit-native"]
 # Unicode bidirectional reordering and bracket mirroring for right-to-left
 # text in labels, through the `unicode-bidi` crate.
 bidi = ["liminalkit-text/bidi"]
+# EXPERIMENTAL game UI over a rendered scene, as `liminalkit::game`: layers,
+# animation, effects, notifications and windows that conform to a planet.
+game = ["dep:liminalkit-game"]
+
+[[example]]
+name = "planet"
+required-features = ["game"]
 
 [lints]
 workspace = true

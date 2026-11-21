@@ -70,6 +70,20 @@ pub use liminalkit_windowing as windowing;
 #[cfg(feature = "kms")]
 pub use liminalkit_kms as kms;
 
+/// **EXPERIMENTAL.** Game UI over a rendered scene: the `liminalkit-game`
+/// crate. Layers of ordinary [`ui::Ui`] content that animate, shimmer and
+/// flash without being repainted, an animated notification stack, and
+/// windows that lie on a planet and peel off flat — drawn by a CPU
+/// compositor or, from the same description, by the host's GPU.
+#[cfg(feature = "game")]
+pub use liminalkit_game as game;
+
+/// Operating-system controls inside a liminalkit window: the
+/// `liminalkit-native` crate, plus controls that are native where the
+/// platform has them and drawn by [`ui::Ui`] where it does not.
+#[cfg(feature = "native")]
+pub mod native;
+
 pub mod app;
 
 pub use app::{run, App, Context, Screen};

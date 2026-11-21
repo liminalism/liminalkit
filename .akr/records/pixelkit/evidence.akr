@@ -127,6 +127,19 @@ record pixelkit.evidence.gallery-renders-at-2x/1 : evidence {
         """
 }
 
+record pixelkit.evidence.game-planet-scripted-drag/1 : evidence {
+    title "Planet example, scripted drag through the router: a window peels off the planet and lays back down; CPU interface cost measured"
+    state verified
+    result pass
+    method command
+    observed_at git:94fe8ac3918a9e4c729da4dc8a1e739e53b0b620
+    command "cargo run --release -p liminalkit --example planet --features game -- --frames 240"
+    summary """
+        Working tree on top of this commit (the game crate is uncommitted). A scripted pointer pressed the comms window's title bar through Router::pointer, dragged it past the horizon and back, and released over the planet: the sheet went Surface, Peeling, Flat, Laying, Surface. 240 frames at 1280x720 on one Windows desktop: mean 22.5 ms a frame, of which the stand-in ray-cast planet 8.3 ms and the interface (paint, meshes, CPU composite) 14.3 ms; earlier runs gave 12.0 to 13.6 ms for the interface. Last frame: 3 layers composited directly, 2 through meshes, 2 shaded, 1 shadow. The windowed example was also started and ran 6 seconds without error, but nobody operated it by hand. The reference WGSL was validated separately with naga 30.0.1 from a scratch crate: three entry points, uniform struct span 144 bytes.
+        """
+    author "dk"
+}
+
 record pixelkit.evidence.grab-cursors-lege-gui-20261109/1 : evidence {
     title "Lege's liminalUI GUI (uncommitted change on its working tree) built against this tree via command-line patches: 79 passed, 0 failed, 5 ignored, three runs. New test the_pointer_is_a_hand_over_a_tile_and_a_closed_hand_while_holding_it: arrow away from tiles, Grab over an output tile, Grabbing while pressed, Grab again on the release frame (a bug the test caught: the release frame had dropped to the arrow), arrow after the cursor leaves. One unrelated test, preview_drives_active_palette_light_and_dark, failed once in four runs (shared global palette)."
     state verified
@@ -227,6 +240,44 @@ record pixelkit.evidence.legeos-workspace-format-20261009/1 : evidence {
     summary """
         The LegeOS WP17 formatter changed precisely 13 tracked Pixelkit source files; they had no prior tracked changes. The consuming full workspace check exits zero. The retained local artifact records exact before/after hashes; originals and the separate formatter patch are retained in sibling LegeOS scratch. No SIMD or toolkit behavior change, independent Pixelkit test run or raster work completion is claimed.
         """
+}
+
+record pixelkit.evidence.native-controls-screenshots/1 : evidence {
+    title "Windows 11 Pro 10.0.26300, 1x display, uncommitted tree on b60e4ce. Screen captures of `native_controls` (debug build): in native mode the toolbar shows themed Win32 Save button, B and I toggles, a drop-down showing \"Body\", an empty text field and a label reading \"native controls, 0 saves\" in the theme's text colour on the dark drawn background, above a liminalkit-drawn panel with heading and text; nothing is overpainted. With --drawn the same screen shows liminalkit-drawn Save/B/I buttons and text in the same positions. Seen at one scale only; interaction by a person (mouse, real keyboard, IME while a field has focus) was not observed."
+    state verified
+    result pass
+    method observation
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    summary """
+        Windows 11 Pro 10.0.26300, 1x display, uncommitted tree on b60e4ce. Screen captures of `native_controls` (debug build): in native mode the toolbar shows themed Win32 Save button, B and I toggles, a drop-down showing "Body", an empty text field and a label reading "native controls, 0 saves" in the theme's text colour on the dark drawn background, above a liminalkit-drawn panel with heading and text; nothing is overpainted. With --drawn the same screen shows liminalkit-drawn Save/B/I buttons and text in the same positions. Seen at one scale only; interaction by a person (mouse, real keyboard, IME while a field has focus) was not observed.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.native-controls-selftest/1 : evidence {
+    title "Windows 11 Pro 10.0.26300 x86_64, rustc 1.99.1, winsafe 0.0.27, uncommitted tree on b60e4ce. Exit 0, \"native_selftest (native): 39 checks passed\": five Win32 child controls created and visible at the laid-out rectangle, parent has WS_CLIPCHILDREN, BM_CLICK reported once as Clicked and toggles on, combo pick reported as Selected, text change reported as TextChanged, Enter gives Submitted and Escape Cancelled with focus back on the parent, set_checked/set_selected/set_text/set_enabled reach the controls with no event, focus(id)/focus_canvas() move focus, an unplaced frame hides the controls and moves focus off the hidden field, re-placing shows them. With --drawn: exit 0, is_native false, no events."
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo run -p liminalkit-native --example native_selftest"
+    summary """
+        Windows 11 Pro 10.0.26300 x86_64, rustc 1.99.1, winsafe 0.0.27, uncommitted tree on b60e4ce. Exit 0, "native_selftest (native): 39 checks passed": five Win32 child controls created and visible at the laid-out rectangle, parent has WS_CLIPCHILDREN, BM_CLICK reported once as Clicked and toggles on, combo pick reported as Selected, text change reported as TextChanged, Enter gives Submitted and Escape Cancelled with focus back on the parent, set_checked/set_selected/set_text/set_enabled reach the controls with no event, focus(id)/focus_canvas() move focus, an unplaced frame hides the controls and moves focus off the hidden field, re-placing shows them. With --drawn: exit 0, is_native false, no events.
+        """
+    author "dk"
+}
+
+record pixelkit.evidence.native-controls-suite/1 : evidence {
+    title "Windows 11 Pro 10.0.26300 x86_64, rustc 1.99.1, uncommitted tree on b60e4ce. 597 passed, 0 failed across the workspace, including liminalkit-native's 17 unit tests (model reconciliation, event rules, host forwarding) and the facade doctest for liminalkit::native. `cargo clippy --workspace --all-targets --features liminalkit/native` printed no warnings or errors; `cargo fmt --all --check` clean. Not observed: any non-Windows build of liminalkit-native."
+    state verified
+    result pass
+    method command
+    observed_at git:b60e4cea168f51e082e48d0058cef6aa9c2b94da
+    command "cargo test --workspace --features liminalkit/native"
+    summary """
+        Windows 11 Pro 10.0.26300 x86_64, rustc 1.99.1, uncommitted tree on b60e4ce. 597 passed, 0 failed across the workspace, including liminalkit-native's 17 unit tests (model reconciliation, event rules, host forwarding) and the facade doctest for liminalkit::native. `cargo clippy --workspace --all-targets --features liminalkit/native` printed no warnings or errors; `cargo fmt --all --check` clean. Not observed: any non-Windows build of liminalkit-native.
+        """
+    author "dk"
 }
 
 record pixelkit.evidence.scroll-stage1-suite/1 : evidence {

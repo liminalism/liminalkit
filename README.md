@@ -112,13 +112,15 @@ Raster and text do not know about either host. The shell is what they share with
 
 | Crate | Role |
 |---|---|
-| [`liminalkit`](crates/liminalkit) | The front door: re-exports the crates below as `liminalkit::{raster, text, shell, ui, windowing, kms}`, plus `App` and `Screen`. Features: `accessibility`, `kms`, `bidi`. |
+| [`liminalkit`](crates/liminalkit) | The front door: re-exports the crates below as `liminalkit::{raster, text, shell, ui, windowing, kms, native, game}`, plus `App` and `Screen`. Features: `accessibility`, `kms`, `bidi`, `native`, `game`. |
 | [`liminalkit-raster`](crates/liminalkit-raster) | An XRGB buffer, a clipped painter, and analytic coverage for paths and glyphs. PNG, images prepared once for the size they are drawn at, and SVG icons rasterized once and tinted. |
 | [`liminalkit-text`](crates/liminalkit-text) | TrueType faces, the OpenType substitutions and positioning this stack implements, fallback, wrapping, and a string cache. `bidi` adds Unicode bidirectional reordering. |
 | [`liminalkit-shell`](crates/liminalkit-shell) | `Input`, `Scale`, `Presenter`, the clipboard, and touch contacts. |
 | [`liminalkit-ui`](crates/liminalkit-ui) | Immediate-mode controls over those three, keyboard focus, and stateless layout. |
 | [`liminalkit-windowing`](crates/liminalkit-windowing) | OS windows, draggable panes, and floating in-app windows. `winit` and `softbuffer` stay here. |
 | [`liminalkit-kms`](crates/liminalkit-kms) | The Linux DRM/KMS and evdev host for a `PixelApp`. |
+| [`liminalkit-native`](crates/liminalkit-native) | Operating-system controls inside a liminalkit window: real Win32 buttons, toggles, combos and text fields (through `winsafe`) at rectangles the liminalkit layout chose, drawn stand-ins elsewhere. Facade feature `native`. The one crate with `unsafe`, in its Windows backend only. |
+| [`liminalkit-game`](crates/liminalkit-game) | Experimental. An interface over a rendered scene: layers that animate without repainting, shimmer / flash / glow effects, a notification stack, and windows that lie on a planet and peel off flat. Drawn by a CPU compositor or, from the same frame description, by the host's GPU; no GPU dependency. Facade feature `game`. |
 | [`liminalkit-test-fonts`](crates/liminalkit-test-fonts) | Noto Sans and Noto Sans Thai as a `FontSet` for tests and examples. Not published. |
 
 The workspace forbids `unsafe`. Rust 1.85 or newer.
@@ -181,6 +183,9 @@ cargo run -p liminalkit --example multi
 # Contacts, and the untested tuning playground
 cargo run -p liminalkit --example touch
 cargo run -p liminalkit --example touch_tuning
+
+# Experimental game UI over a turning planet: windows that lie on it and peel off, notifications, effects
+cargo run --release -p liminalkit --example planet --features game
 
 # Displays this process can see, without taking one
 cargo run -p liminalkit-kms --example probe

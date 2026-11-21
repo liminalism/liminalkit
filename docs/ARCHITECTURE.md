@@ -6,6 +6,7 @@ liminalkit is an explicit-state, software-rendered GUI toolkit. This is the map 
 
 ```
 liminalkit            front door: re-exports, prelude, App/Screen adapter, examples
+├── liminalkit-game        EXPERIMENTAL layers, animation, effects, warped windows; `game` feature  (raster, text, shell, ui)
 ├── liminalkit-ui          controls, focus, layout, popups     (raster, text, shell)
 ├── liminalkit-windowing   OS windows via winit + softbuffer, in-app panes and windows  (raster, shell)
 ├── liminalkit-kms         Linux DRM/KMS + evdev host          (raster, shell, windowing's PixelApp)
@@ -43,6 +44,12 @@ In the application's own structs. A control is a function that takes a rectangle
 - In-app layout: `Panes` and `Windows` hold fractions and rectangles; the application draws into what they report.
 
 The rule for anything new: ownership, allocations and any state kept between frames are visible in the signature.
+
+## Game surfaces (experimental)
+
+`liminalkit-game` is for the case the rest of the toolkit is not: an interface over a scene that changes every frame. It keeps the toolkit's rules and adds one idea, paint rarely and place every frame. A `Layer` owns a `Surface` (a premultiplied buffer painted by an ordinary `Ui`, with its own `Input` in the buffer's coordinates), a `Sheet` (flat on the screen, lying on a sphere, cylinder or plane, or peeling between) and `Effects`. Each frame a layer is turned into a screen-space mesh and a block of uniforms; a `GameFrame` lists the layers in band and z order; and that one list is drawn either by the CPU compositor, through `Painter::draw_textured_mesh`, or by the host's GPU with the reference shader. liminalkit still links no GPU code: the GPU path is data and shader text, and the scalar `effect::shade` and the integer mesh rasterizer are the specification both are held to.
+
+Input goes the other way through the same mesh. `Router` finds the topmost layer the pointer is on by inverting the triangles that were drawn, and delivers the event to that layer's `Input` in its own coordinates, so a button on a window bent over a planet is an ordinary button. It reports whether the interface consumed the event; what it did not consume belongs to the world. The router's state is three caller-chosen layer keys. Every layer, queue, tween and sheet is a value the application owns, and all of them are advanced by host time and settle at once without it. The crate's README has the frame and the GPU contract.
 
 ## Units
 
