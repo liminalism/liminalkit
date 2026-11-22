@@ -81,6 +81,14 @@ than the one it was extracted from can pick up.
 
 ### Added
 
+- **Window icons.** `WindowConfig::icon` takes a `WindowIcon`: straight
+  RGBA pixels (X11 and Windows), or `WindowIcon::WindowsResource(ordinal)`,
+  which loads an icon compiled into the executable at the small and large
+  sizes for the window's scale factor, so Windows picks the matching image
+  instead of stretching one. Wayland and macOS take the icon from the desktop
+  entry or app bundle and ignore it. The field is additive; code that builds
+  `WindowConfig` with a struct literal adds `icon: None`.
+
 - **Experimental: game UI, as a new crate.** `liminalkit-game`, re-exported as
   `liminalkit::game` behind the facade's `game` feature, is an interface over
   a rendered scene. A `Layer` is a `Surface` (a premultiplied buffer the

@@ -639,6 +639,35 @@ record pixelkit.work.ui-capabilities/1 : work {
     }
 }
 
+record pixelkit.work.window-icon/1 : work {
+    title "Window icons through WindowConfig: RGBA pixels, or a Windows icon resource loaded per DPI"
+    state completed
+    scope [
+        path "crates/liminalkit-windowing/src/host.rs",
+        path "crates/liminalkit-windowing/src/lib.rs"
+    ]
+    intent """
+        Let an application give its windows an icon. winit registers its window class with no icon, so without this every liminalkit window shows a generic one in the title bar and taskbar even when the executable embeds an icon.
+        """
+    trace [
+        "Gideon asked for its program icon on the running window; winit 0.30 registers the window class with hIcon 0, so the exe resource never reached the title bar.",
+        "Icons are applied after window creation, not via attributes, because only then is the scale factor known for loading 16 and 32 logical px resources.",
+        "A bad icon is ignored rather than failing window creation: a missing icon is cosmetic, a window that will not open is not.",
+        "Verified from Gideon: WM_GETICON on the running window returned a 16x16 small and 32x32 big icon from resource 1; X11 path built and clippy-clean in WSL."
+    ]
+    acceptance {
+        check clippy {
+            statement """
+                Strict clippy passes for liminalkit-windowing.
+                """
+            method command
+            command "cargo clippy -p liminalkit-windowing --all-targets -- -D warnings"
+            passed_at git:bc937a7474be8f77339690939c730afe8de37deb
+        }
+    }
+    author "dk"
+}
+
 record pixelkit.work.windowing-crate/1 : work {
     title "Windowing crate: host move, multi-window, panes, in-app windows"
     state completed

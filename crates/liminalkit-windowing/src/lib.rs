@@ -29,7 +29,7 @@ pub use host::{
     run_app, run_app_with_presenter, run_window_service, run_windows, run_windows_with_presenter,
     CursorShape, FrameInfo, GesturePhase, ImeCursorArea, ImeEvent, KeyEvent, MultiPresenterFactory,
     PixelApp, PresenterFactory, ScrollEvent, ScrollSettings, Wake, Waker, WheelSample,
-    WindowConfig, WindowRequest,
+    WindowConfig, WindowIcon, WindowRequest,
 };
 pub use panes::{PaneId, PaneMetrics, Panes, Side};
 pub use windows::{WindowId, WindowMetrics, Windows};

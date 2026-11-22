@@ -2,10 +2,10 @@ akr-lock 0.1
 project pixelkit
 
 build {
-    tool "akr 0.7.0"
+    tool "akr 0.8.0"
     grammar "0.1"
     vocabulary "0.3"
-    source_graph "sha256:f8702b3a73acb3caaa89ee0ffac2bdf44564b94ff60e83cfd804e651207459dd"
+    source_graph "sha256:3afc57fc609e8497e04b11ba6b2e68cac6a70a251458e70ef04d6104407949e8"
 }
 
 source ".akr/project.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/pixelkit/questions.akr" {
 }
 
 source ".akr/records/pixelkit/work.akr" {
-    hash "sha256:13b1ec93642e0c58473b384f9be9f5a4ee24371798d1072510d917665c070dc8"
-    records 20
+    hash "sha256:ec7a92b172be94ac5f38a1994ccd5935c941b9b84fd648a247aa4652d034b0b7"
+    records 21
 }
 
 resolution @pixelkit.decision.bidi-behind-feature/1 {
@@ -591,6 +591,11 @@ seal @pixelkit.work.touchscreen/1 {
 seal @pixelkit.work.ui-capabilities/1 {
     state completed
     hash "sha256:6759cd7a82fbb36d5c6b44b8c912cfba84b211012305f8e5bca8d3aedbc5223b"
+}
+
+seal @pixelkit.work.window-icon/1 {
+    state completed
+    hash "sha256:4bbb5934067099cd81d6895281c29f07c3ef9202efecbbcee8ad4acf1451bb6d"
 }
 
 seal @pixelkit.work.windowing-crate/1 {

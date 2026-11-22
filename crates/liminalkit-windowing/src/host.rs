@@ -476,6 +476,28 @@ pub struct WindowConfig {
     /// carries no identity, so the taskbar cannot group it with its launcher
     /// icon. Ignored on every other platform.
     pub app_id: Option<String>,
+    /// The title-bar, taskbar and switcher icon. `None` leaves the platform
+    /// default. Wayland and macOS take an application's icon from its
+    /// desktop entry and app bundle, so there it is ignored.
+    pub icon: Option<WindowIcon>,
+}
+
+/// Where a window's icon comes from.
+#[derive(Debug, Clone)]
+pub enum WindowIcon {
+    /// Straight (non-premultiplied) RGBA8 pixels, row-major,
+    /// `width * height * 4` bytes. Used on X11 and Windows; the window
+    /// manager scales it to each slot it draws.
+    Rgba {
+        rgba: Vec<u8>,
+        width: u32,
+        height: u32,
+    },
+    /// Windows: an icon resource compiled into the executable, by ordinal
+    /// (1 is the one Explorer shows). Loaded at the small and large icon
+    /// sizes for the window's scale factor, so Windows picks the matching
+    /// image from the group instead of stretching one. Ignored elsewhere.
+    WindowsResource(u16),
 }
 
 impl WindowConfig {
@@ -492,7 +514,13 @@ impl WindowConfig {
             fullsize_content_view: false,
             activation_token: None,
             app_id: None,
+            icon: None,
         }
+    }
+
+    pub fn icon(mut self, icon: WindowIcon) -> WindowConfig {
+        self.icon = Some(icon);
+        self
     }
 
     pub fn min_size(mut self, width: f64, height: f64) -> WindowConfig {
@@ -873,6 +901,9 @@ impl Shell {
                 return;
             }
         };
+        if let Some(icon) = &slot.config.icon {
+            apply_icon(&window, icon);
+        }
         slot.app.on_native_window(&window);
         #[cfg(feature = "accessibility")]
         let accessibility = accesskit_winit::Adapter::with_event_loop_proxy(
@@ -1159,6 +1190,45 @@ pub fn scroll_event(sample: &WheelSample, scale: Scale) -> ScrollEvent {
         line_dx: lines.map(|(x, _)| x as f32),
         line_dy: lines.map(|(_, y)| y as f32),
         phase: sample.phase,
+    }
+}
+
+/// Sets a window's icon after creation, when its scale factor is known.
+/// A bad icon (wrong buffer length, missing resource) leaves the platform
+/// default: an icon is never worth failing to open the window over.
+fn apply_icon(window: &Window, icon: &WindowIcon) {
+    match icon {
+        WindowIcon::Rgba {
+            rgba,
+            width,
+            height,
+        } => {
+            if let Ok(icon) = winit::window::Icon::from_rgba(rgba.clone(), *width, *height) {
+                #[cfg(target_os = "windows")]
+                {
+                    use winit::platform::windows::WindowExtWindows;
+                    window.set_taskbar_icon(Some(icon.clone()));
+                }
+                window.set_window_icon(Some(icon));
+            }
+        }
+        #[cfg(target_os = "windows")]
+        WindowIcon::WindowsResource(ordinal) => {
+            use winit::platform::windows::{IconExtWindows, WindowExtWindows};
+            // SM_CXSMICON and SM_CXICON at 96 dpi, scaled to this window.
+            let edge = |logical: f64| {
+                let px = (logical * window.scale_factor()).round() as u32;
+                Some(winit::dpi::PhysicalSize::new(px, px))
+            };
+            if let Ok(small) = winit::window::Icon::from_resource(*ordinal, edge(16.0)) {
+                window.set_window_icon(Some(small));
+            }
+            if let Ok(large) = winit::window::Icon::from_resource(*ordinal, edge(32.0)) {
+                window.set_taskbar_icon(Some(large));
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        WindowIcon::WindowsResource(_) => {}
     }
 }
 
