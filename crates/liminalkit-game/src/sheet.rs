@@ -491,17 +491,12 @@ impl Sheet {
                 DragOutcome::FlatMoving
             }
             Phase::Surface => {
-                let slid = self.frame.and_then(|frame| {
+                let slid = self.frame.and_then(|_| {
                     let (hit, facing) = pick(scene, cursor)?;
                     if facing < self.tuning.facing_peel {
                         return None;
                     }
-                    // Sized where it is now; the move itself is rigid.
-                    let scale = self.metres_per_texel(scene, &frame)?;
-                    let held = scene
-                        .surface
-                        .exp(&frame, self.offset(grab.texel, scale), 0.0);
-                    scene.surface.slide(&frame, held.pos, hit)
+                    self.upright_frame_holding(scene, grab.texel, hit)
                 });
                 match slid {
                     Some(frame) => {
@@ -573,7 +568,8 @@ impl Sheet {
     /// the sheet is at rest, through the mesh while it is in between.
     pub fn to_local(&self, scene: Option<&Scene<'_>>, px: [f64; 2]) -> Option<[f32; 2]> {
         match (self.phase, scene, self.frame) {
-            (Phase::Surface, Some(scene), Some(frame)) => {
+            (Phase::Surface, Some(scene), Some(_)) => {
+                let frame = self.active_frame(scene)?;
                 let ray = scene.view.ray(px)?;
                 let pose = scene.surface.pose();
                 let body = crate::view::Ray {
@@ -738,8 +734,33 @@ impl Sheet {
         })
     }
 
-    fn conformer<'a>(&self, scene: &'a Scene<'a>) -> Option<Conformer<'a>> {
+    /// The sheet's surface frame, aligned upright on screen at its anchor
+    /// whenever the anchor faces the viewer. Keeping only the anchor point
+    /// pinned to the surface prevents parallel-transport twist during drags
+    /// and keeps text level as the surface turns under the camera.
+    fn active_frame(&self, scene: &Scene<'_>) -> Option<Frame> {
         let frame = self.frame?;
+        Some(upright_frame(scene, frame.origin).unwrap_or(frame))
+    }
+
+    /// Find the upright surface frame whose `texel` lands on `hit`.
+    ///
+    /// A screen-sized sheet's scale and upright orientation both vary slightly
+    /// between `hit` and the sheet's centre anchor, so settle them together.
+    fn upright_frame_holding(&self, scene: &Scene<'_>, texel: [f32; 2], hit: V3) -> Option<Frame> {
+        let mut frame = upright_frame(scene, hit)?;
+        for _ in 0..6 {
+            let scale = self.metres_per_texel(scene, &frame)?;
+            let offset = self.offset(texel, scale);
+            let at = scene.surface.exp(&frame, offset, 0.0).pos;
+            let moved = scene.surface.slide(&frame, at, hit)?;
+            frame = upright_frame(scene, moved.origin).unwrap_or(moved);
+        }
+        Some(frame)
+    }
+
+    fn conformer<'a>(&self, scene: &'a Scene<'a>) -> Option<Conformer<'a>> {
+        let frame = self.active_frame(scene)?;
         let scale = self.metres_per_texel(scene, &frame)?;
         let ripple = match (self.ripple, self.tuning.ripple, self.clock) {
             (Some(ripple), Some(style), Some(clock)) => Some((
@@ -788,27 +809,9 @@ impl Sheet {
         if facing < self.tuning.facing_lay {
             return false;
         }
-        let Some(upright) = upright_frame(scene, hit) else {
+        let Some(frame) = self.upright_frame_holding(scene, texel, hit) else {
             return false;
         };
-        // The frame at the drop point is where `texel` goes; the anchor is
-        // the sheet's centre, so carry the frame back along the surface by
-        // the held point's offset. Moving along a geodesic keeps its
-        // direction, so the held point lands exactly on the drop. A
-        // screen-sized sheet's scale depends on where its anchor ends up, so
-        // settle the two together.
-        let mut frame = upright;
-        for _ in 0..6 {
-            let Some(scale) = self.metres_per_texel(scene, &frame) else {
-                return false;
-            };
-            let offset = self.offset(texel, scale);
-            let anchor = scene.surface.exp(&upright, [-offset[0], -offset[1]], 0.0);
-            let Some(moved) = scene.surface.slide(&upright, hit, anchor.pos) else {
-                return false;
-            };
-            frame = moved;
-        }
         self.flat_origin = self.origin_holding(texel, [px[0] as f32, px[1] as f32]);
         self.frame = Some(frame);
         self.pivot = texel;
@@ -944,12 +947,19 @@ fn any_frame(surface: &dyn Surface3, p: V3) -> Option<Frame> {
 fn upright_frame(scene: &Scene<'_>, p: V3) -> Option<Frame> {
     let frame = any_frame(scene.surface, p)?;
     let pose = scene.surface.pose();
+    let world = pose.to_world(p);
+    let facing = pose
+        .dir_to_world(frame.n)
+        .dot(scene.view.toward_viewer(world));
+    if facing <= 1e-6 {
+        return None;
+    }
     let project = |d: [f64; 2]| {
         let at = scene.surface.exp(&frame, d, 0.0);
         scene.view.project(pose.to_world(at.pos)).map(|p| p.px)
     };
     // A step small enough to be straight, large enough to survive rounding.
-    let step = scene.view.footprint_m(pose.to_world(p)).max(1e-9) * 4.0;
+    let step = scene.view.footprint_m(world).max(1e-9) * 4.0;
     let (origin, along_x, along_y) = (
         project([0.0, 0.0])?,
         project([step, 0.0])?,
@@ -1714,5 +1724,196 @@ mod tests {
         let mut sheet = Sheet::flat([240, 160], [100.0, 50.0]);
         sheet.set_size([300, 200]);
         assert_eq!(sheet.flat_rect(), RectF::new(70.0, 30.0, 300.0, 200.0));
+    }
+
+    /// A whole globe in view from 2.5 radii out, looking down -z.
+    fn globe_view() -> Pinhole {
+        Pinhole {
+            eye: V3::new(0.0, 0.0, R * 2.5),
+            right: V3::X,
+            up: V3::Y,
+            back: V3::Z,
+            tan_half_fov_y: (27.5_f64).to_radians().tan(),
+            viewport: [1280, 720],
+        }
+    }
+
+    fn assert_upright(sheet: &Sheet, label: &str) {
+        let [w, h] = sheet.size();
+        let (cx, cy) = (w as f32 / 2.0, h as f32 / 2.0);
+        // Horizontal baseline at the centre and along the top edge: +X on screen.
+        let (left, right) = (
+            screen_of(sheet, [cx - 40.0, cy]),
+            screen_of(sheet, [cx + 40.0, cy]),
+        );
+        let dx = right[0] - left[0];
+        let dy = right[1] - left[1];
+        assert!(
+            dx > 20.0,
+            "{label}: centre x goes right ({left:?} -> {right:?})"
+        );
+        assert!(
+            dy.abs() / dx < 0.02,
+            "{label}: centre baseline level ({left:?} -> {right:?})"
+        );
+        let (top_l, top_r) = (
+            screen_of(sheet, [20.0, 10.0]),
+            screen_of(sheet, [w as f32 - 20.0, 10.0]),
+        );
+        let tdx = top_r[0] - top_l[0];
+        let tdy = top_r[1] - top_l[1];
+        assert!(
+            tdx > 40.0,
+            "{label}: top edge goes right ({top_l:?} -> {top_r:?})"
+        );
+        assert!(
+            tdy.abs() / tdx < 0.10,
+            "{label}: top edge level ({top_l:?} -> {top_r:?})"
+        );
+        // Vertical axis: +Y on screen (downward in device pixels).
+        let (top, bottom) = (
+            screen_of(sheet, [cx, cy - 30.0]),
+            screen_of(sheet, [cx, cy + 30.0]),
+        );
+        let vdx = bottom[0] - top[0];
+        let vdy = bottom[1] - top[1];
+        assert!(
+            vdy > 10.0,
+            "{label}: vertical axis goes down ({top:?} -> {bottom:?})"
+        );
+        assert!(
+            vdx.abs() < vdy,
+            "{label}: vertical axis stays upright ({top:?} -> {bottom:?})"
+        );
+    }
+
+    #[test]
+    fn dragging_around_a_closed_loop_and_across_latitudes_keeps_the_sheet_upright() {
+        let globe = Sphere {
+            radius_m: R,
+            pose: Pose::IDENTITY,
+        };
+        let view = globe_view();
+        let scene = Scene {
+            surface: &globe,
+            view: &view,
+            light: None,
+        };
+        let options = MeshOptions::default();
+        let mut sheet = Sheet::flat([200, 120], [540.0, 300.0]);
+        sheet.tuning.shadow = None;
+        assert!(sheet.lay_at(&scene, [640.0, 360.0], None));
+        sheet.advance(None);
+        sheet.build(Some(&scene), &options);
+        assert_upright(&sheet, "initial");
+
+        // Grab off-centre and drag around a wide loop spanning high/low
+        // latitudes and east/west longitudes, then back to the start.
+        let grab = [40.0_f32, 20.0];
+        let start = screen_of(&sheet, grab);
+        sheet.begin_drag(grab, [f64::from(start[0]), f64::from(start[1])]);
+
+        let waypoints = [
+            [600.0, 220.0],
+            [700.0, 250.0],
+            [700.0, 420.0],
+            [600.0, 450.0],
+            [480.0, 420.0],
+            [480.0, 250.0],
+            [f64::from(start[0]), f64::from(start[1])],
+        ];
+        let mut prev = [f64::from(start[0]), f64::from(start[1])];
+        for (leg, &target) in waypoints.iter().enumerate() {
+            for step in 1..=12 {
+                let t = f64::from(step) / 12.0;
+                let cursor = [
+                    prev[0] + (target[0] - prev[0]) * t,
+                    prev[1] + (target[1] - prev[1]) * t,
+                ];
+                assert_eq!(
+                    sheet.drag_to(&scene, cursor, None),
+                    DragOutcome::Sliding,
+                    "leg {leg} step {step}"
+                );
+                sheet.build(Some(&scene), &options);
+                let held = screen_of(&sheet, grab);
+                let miss = (f64::from(held[0]) - cursor[0]).hypot(f64::from(held[1]) - cursor[1]);
+                assert!(miss < 0.5, "leg {leg} step {step}: {miss} px");
+                assert_upright(&sheet, &format!("leg {leg} step {step}"));
+            }
+            prev = target;
+        }
+    }
+
+    #[test]
+    fn a_lying_sheet_stays_upright_as_the_globe_rotates_and_over_the_pole() {
+        let view = globe_view();
+        let options = MeshOptions::default();
+
+        // Anchor at a mid-latitude point; rolling the globe about the view
+        // axis (+Z) would spin a body-fixed tangent frame by 90 degrees.
+        let initial_globe = Sphere {
+            radius_m: R,
+            pose: Pose::IDENTITY,
+        };
+        let initial_scene = Scene {
+            surface: &initial_globe,
+            view: &view,
+            light: None,
+        };
+        let mut sheet = Sheet::flat([200, 120], [540.0, 300.0]);
+        sheet.tuning.shadow = None;
+        assert!(sheet.lay_at(&initial_scene, [720.0, 280.0], None));
+        sheet.advance(None);
+
+        for deg in [0.0_f64, 30.0, 60.0, 90.0, 135.0, -45.0] {
+            let globe = Sphere {
+                radius_m: R,
+                pose: Pose {
+                    origin: V3::ZERO,
+                    rotation: M3::rodrigues(V3::Z, deg.to_radians()),
+                },
+            };
+            let scene = Scene {
+                surface: &globe,
+                view: &view,
+                light: None,
+            };
+            sheet.build(Some(&scene), &options);
+            assert_upright(&sheet, &format!("roll {deg} deg"));
+        }
+
+        // Looking straight down at the north pole (V3::Y * R): no singularity
+        // flip even when spinning around the pole axis.
+        let pole_frame = initial_globe
+            .frame_at(V3::Y * R, V3::X)
+            .expect("frame at pole");
+        let mut pole_sheet =
+            Sheet::on_surface([200, 120], pole_frame, Extent::Screen { scale: 1.0 });
+        pole_sheet.tuning.shadow = None;
+        let pole_view = Pinhole {
+            eye: V3::new(0.0, R * 3.5, 0.0),
+            right: V3::X,
+            up: -V3::Z,
+            back: V3::Y,
+            tan_half_fov_y: (27.5_f64).to_radians().tan(),
+            viewport: [1280, 720],
+        };
+        for deg in [0.0_f64, 45.0, 90.0, 180.0, 270.0] {
+            let globe = Sphere {
+                radius_m: R,
+                pose: Pose {
+                    origin: V3::ZERO,
+                    rotation: M3::rodrigues(V3::Y, deg.to_radians()),
+                },
+            };
+            let scene = Scene {
+                surface: &globe,
+                view: &pole_view,
+                light: None,
+            };
+            pole_sheet.build(Some(&scene), &options);
+            assert_upright(&pole_sheet, &format!("pole spin {deg} deg"));
+        }
     }
 }
